@@ -350,17 +350,17 @@ Hook 使用 `apiKey` 作为 `Authorization: Bearer ...`，payload 中不要传 `
 - `client.tools.list(options)`
 - `client.tools.get(toolId)`
 - `client.tools.update(toolId, payload)`
-- `client.tools.delete(toolId, { operatorId })`
+- `client.tools.delete(toolId)`
 - `client.tools.resolve(toolId)`
 - `client.skills.register(payload)`
 - `client.skills.list(options)`
 - `client.skills.get(skillId)`
 - `client.skills.update(skillId, payload)`
-- `client.skills.delete(skillId, { operatorId })`
+- `client.skills.delete(skillId)`
 - `client.agents.register(payload)`
 - `client.agents.list(options)`
 - `client.agents.update(agentId, payload)`
-- `client.agents.delete(agentId, { operatorId })`
+- `client.agents.delete(agentId)`
 - `client.agents.capabilities(agentId)`
 - `client.hooks.register(payload)`
 - `client.hooks.list(options)`

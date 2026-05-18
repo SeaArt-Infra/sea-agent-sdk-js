@@ -27,9 +27,7 @@ export class SkillsResource {
     return this.transport.put(`/v1/skills/${encodeURIComponent(skillId)}`, payload);
   }
 
-  async delete(skillId, options) {
-    return this.transport.delete(`/v1/skills/${encodeURIComponent(skillId)}`, {
-      operator_id: options.operatorId,
-    });
+  async delete(skillId) {
+    return this.transport.delete(`/v1/skills/${encodeURIComponent(skillId)}`);
   }
 }

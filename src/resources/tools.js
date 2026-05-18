@@ -26,10 +26,8 @@ export class ToolsResource {
     return this.transport.put(`/v1/tools/${encodeURIComponent(toolId)}`, payload);
   }
 
-  async delete(toolId, options) {
-    return this.transport.delete(`/v1/tools/${encodeURIComponent(toolId)}`, {
-      operator_id: options.operatorId,
-    });
+  async delete(toolId) {
+    return this.transport.delete(`/v1/tools/${encodeURIComponent(toolId)}`);
   }
 
   async resolve(toolId) {

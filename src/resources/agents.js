@@ -11,10 +11,8 @@ export class AgentsResource {
     return this.transport.put(`/v1/agents/${encodeURIComponent(agentId)}`, payload);
   }
 
-  async delete(agentId, options) {
-    return this.transport.delete(`/v1/agents/${encodeURIComponent(agentId)}`, {
-      operator_id: options.operatorId,
-    });
+  async delete(agentId) {
+    return this.transport.delete(`/v1/agents/${encodeURIComponent(agentId)}`);
   }
 
   async list(options = {}) {
