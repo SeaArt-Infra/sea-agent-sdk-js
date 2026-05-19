@@ -8,7 +8,6 @@ export class CatalogResource {
       capability_type: options.capabilityType,
       search: options.search,
       status: options.status,
-      source_kind: options.sourceKind,
       public: options.public,
       provider: options.provider,
       limit: options.limit,

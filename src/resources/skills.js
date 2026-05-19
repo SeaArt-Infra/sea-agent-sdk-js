@@ -11,7 +11,6 @@ export class SkillsResource {
     return this.transport.get("/v1/skills", {
       search: options.search,
       status: options.status,
-      source_kind: options.sourceKind,
       public: options.public,
       provider: options.provider,
       limit: options.limit,
