@@ -362,6 +362,7 @@ Hook 使用 `apiKey` 作为 `Authorization: Bearer ...`，payload 中不要传 `
 - `client.skills.delete(skillId)`
 - `client.agents.register(payload)`
 - `client.agents.list(options)`
+- `client.agents.get(agentId)`
 - `client.agents.update(agentId, payload)`
 - `client.agents.delete(agentId)`
 - `client.agents.capabilities(agentId)`

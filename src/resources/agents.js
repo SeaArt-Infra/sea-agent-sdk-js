@@ -26,6 +26,10 @@ export class AgentsResource {
     });
   }
 
+  async get(agentId) {
+    return this.transport.get(`/v1/agents/${encodeURIComponent(agentId)}`);
+  }
+
   async capabilities(agentId) {
     return this.transport.get(`/v1/agents/${encodeURIComponent(agentId)}/capabilities`);
   }
