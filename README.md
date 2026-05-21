@@ -275,7 +275,6 @@ console.log(result);
 ```js
 const tool = await client.tools.register({
   name: "search_web",
-  version: "v1",
   description: "Search public web pages.",
   runtime_type: "http",
   endpoint: "https://example.com/tools/search",
@@ -299,7 +298,6 @@ console.log(tool);
 ```js
 const skill = await client.skills.register({
   name: "web_research",
-  version: "v1",
   description: "Research a topic with web tools.",
   instruction: "Search, compare sources, and summarize findings.",
   required_tools: [
@@ -317,7 +315,6 @@ console.log(skill);
 ```js
 const agent = await client.agents.register({
   name: "web_assistant",
-  version: "v1",
   category: "fabric",
   system_prompt: "You are a web research assistant.",
   skills: ["11111111-1111-4111-8111-111111111111"],
