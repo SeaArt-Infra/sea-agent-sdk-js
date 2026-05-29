@@ -94,6 +94,30 @@ const result = await client.chat.run({
 console.log(result);
 ```
 
+使用 OpenAI 风格的多模态消息：
+
+```js
+const result = await client.chat.run({
+  agentId: "33333333-3333-4333-8333-333333333333",
+  messages: [
+    {
+      role: "user",
+      content: [
+        { type: "text", text: "描述这张图片" },
+        {
+          type: "image_url",
+          image_url: {
+            url: "https://image.cdn2.seaart.me/static/infra/agent-chat/user-11/image/20260529/e4fc53aac523b4f56e582a65a717381a.png",
+          },
+        },
+      ],
+    },
+  ],
+});
+
+console.log(result);
+```
+
 带请求元数据和自定义 Header 的聊天：
 
 ```js
