@@ -302,6 +302,7 @@ const tool = await client.tools.register({
   description: "Search public web pages.",
   runtime_type: "http",
   endpoint: "https://example.com/tools/search",
+  service_name: "example",
   method: "POST",
   parameters: {
     type: "object",
@@ -316,6 +317,8 @@ const tool = await client.tools.register({
 
 console.log(tool);
 ```
+
+HTTP Tool `service_name` should identify the backing service shared by tools on the same server. If omitted, agent-gateway derives it from the endpoint host prefix; builtin and no-endpoint tools default to `deepagent`. Do not send `inject_user_credentials` in user-facing registration payloads; gateway defaults it to `false` and forwards the managed field to Worker.
 
 注册技能：
 
