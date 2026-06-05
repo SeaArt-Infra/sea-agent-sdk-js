@@ -255,6 +255,7 @@ const result = await client.chat.run({
     agent: {
       name: "inline-assistant",
       model: "gpt-4.1-mini",
+      reasoning_effort: "medium",
       temperature: 0.2,
       max_turns: 6,
       timeout: 120,
