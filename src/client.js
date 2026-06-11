@@ -32,6 +32,11 @@ export class SeaAgentClient {
     return new SeaAgentClient({
       endpoint: config.endpoint,
       apiKey: config.apiKey,
+      headers: headersFromConfig(config),
     });
   }
+}
+
+function headersFromConfig(config) {
+  return config.userId ? { "X-User-ID": config.userId } : undefined;
 }

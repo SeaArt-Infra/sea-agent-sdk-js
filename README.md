@@ -46,12 +46,13 @@ const client = await SeaAgentClient.fromConfig();
 ```yaml
 endpoint: http://127.0.0.1:8080
 apiKey: sa-xxxxxxxx
+userId: production-line-123
 ```
 
 `endpoint` 可以是网关 base URL，也可以已经包含 `/agent-v2`。如果缺少
 `/agent-v2`，SDK 会在发送请求前自动补上。
 
-`X-User-ID` 用于 `tools`、`skills`、`agents` 的注册和更新接口，`agent-gateway` 会用它写入 provider、owner 和操作人字段。也可以通过 `headers` 配置其他全局请求头。
+`X-User-ID` 用于 `tools`、`skills`、`agents` 的注册、更新和删除接口，`agent-gateway` 会用它写入 provider、owner 和操作人字段。`SeaAgentClient.fromConfig()` 会把 `userId` 自动映射为 `X-User-ID`，也可以通过 `headers` 配置其他全局请求头。
 
 列表接口的筛选字段与 CLI/gateway 保持兼容：常用字段包括 `search`、`status`、`provider`、`public`、`limit`、`offset`；兼容字段包括 `sourceKind`、`ownerId`、`category`。分页行为与 CLI 一致：`limit` 省略或 `<= 0` 时默认 20，`> 200` 时由 gateway 封顶为 200，`offset` 从 0 开始。
 
@@ -407,15 +408,18 @@ Hook 使用 `apiKey` 作为 `Authorization: Bearer ...`，payload 中不要传 `
 - `client.tools.list(options)`
 - `client.tools.get(toolId)`
 - `client.tools.update(toolId, payload)`
+- `client.tools.delete(toolId)`
 - `client.tools.resolve(toolId)`
 - `client.skills.register(payload)`
 - `client.skills.list(options)`
 - `client.skills.get(skillId)`
 - `client.skills.update(skillId, payload)`
+- `client.skills.delete(skillId)`
 - `client.agents.register(payload)`
 - `client.agents.list(options)`
 - `client.agents.get(agentId)`
 - `client.agents.update(agentId, payload)`
+- `client.agents.delete(agentId)`
 - `client.agents.capabilities(agentId)`
 - `client.hooks.register(payload)`
 - `client.hooks.list(options)`

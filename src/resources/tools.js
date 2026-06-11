@@ -30,6 +30,10 @@ export class ToolsResource {
     return this.transport.put(`/v1/tools/${encodeURIComponent(toolId)}`, payload);
   }
 
+  async delete(toolId) {
+    return this.transport.delete(`/v1/tools/${encodeURIComponent(toolId)}`);
+  }
+
   async resolve(toolId) {
     return this.transport.get(`/v1/tools/${encodeURIComponent(toolId)}/resolve`);
   }
