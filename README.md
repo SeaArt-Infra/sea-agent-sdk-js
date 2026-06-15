@@ -1,22 +1,47 @@
 # sea-agent-sdk-js
 
-基于当前 `sea-agent-cli` 项目整理出的 Node.js SDK，用于调用 `agent-gateway` 的注册、查询、聊天、SSE 流式响应和 WebSocket 流式响应接口。
+> Beta: SDK API 和 agent-gateway 行为仍可能随网关版本调整。
 
-## 安装
+Node.js SDK for `agent-gateway`. It wraps the gateway APIs for catalog lookup, resource registration, chat completion, SSE streaming, WebSocket streaming, chat replay, and hook management.
+
+The package is ESM-only and requires Node.js 18 or newer.
+
+## Available Resources
+
+| Resource | Client field | What it does |
+| --- | --- | --- |
+| System | `client.system` | Health and metrics checks |
+| Catalog | `client.catalog` | List resolved catalog entries |
+| Tools | `client.tools` | Register, list, update, delete, and resolve tools |
+| Skills | `client.skills` | Register, list, update, and delete skills |
+| Agents | `client.agents` | Register, list, update, delete, and inspect agents |
+| Hooks | `client.hooks` | Register and manage worker event hook endpoints |
+| Chat | `client.chat` | Run chat, stream chat, replay events, and cancel chats |
+
+## How It Works
+
+1. Create a `SeaAgentClient` with an agent-gateway endpoint and optional API key.
+2. The SDK normalizes the endpoint to include `/agent-v2` when needed.
+3. Each resource helper sends gateway-compatible HTTP requests with global and per-request headers.
+4. Chat helpers can either return a full response or process SSE/WebSocket events through callbacks.
+
+`X-User-ID` is required for `tools`, `skills`, and `agents` write operations when the gateway needs provider, owner, or operator metadata. `SeaAgentClient.fromConfig()` maps `userId` from the CLI config to `X-User-ID`.
+
+## Quick Start
+
+Install the package:
 
 ```bash
 npm install sea-agent-sdk-js
 ```
 
-如果你当前是本地开发：
+For local development inside this repository:
 
 ```bash
 npm install
 ```
 
-当前包使用 ESM，并要求 Node.js 18 或更高版本。
-
-## 初始化
+Create a client and run a chat request:
 
 ```js
 import { SeaAgentClient } from "sea-agent-sdk-js";
@@ -29,11 +54,36 @@ const client = new SeaAgentClient({
   },
 });
 
+const result = await client.chat.run({
+  agentId: "33333333-3333-4333-8333-333333333333",
+  message: "Search recent AI news and summarize the top 3 items.",
+});
+
+console.log(result);
+```
+
+Check gateway health:
+
+```js
 const health = await client.system.health();
 console.log(health);
 ```
 
-也可以复用 CLI 的默认配置文件：
+## Configuration
+
+Pass options directly:
+
+```js
+const client = new SeaAgentClient({
+  endpoint: "http://127.0.0.1:8080",
+  apiKey: process.env.AGENT_GATEWAY_API_KEY,
+  headers: {
+    "X-User-ID": "production-line-123",
+  },
+});
+```
+
+Or reuse the CLI config:
 
 ```js
 import { SeaAgentClient } from "sea-agent-sdk-js";
@@ -41,7 +91,7 @@ import { SeaAgentClient } from "sea-agent-sdk-js";
 const client = await SeaAgentClient.fromConfig();
 ```
 
-默认读取 `~/.seaagent/config.yaml`，格式与 CLI 一致：
+By default, the SDK reads `~/.seaagent/config.yaml`:
 
 ```yaml
 endpoint: http://127.0.0.1:8080
@@ -49,16 +99,11 @@ apiKey: sa-xxxxxxxx
 userId: production-line-123
 ```
 
-`endpoint` 可以是网关 base URL，也可以已经包含 `/agent-v2`。如果缺少
-`/agent-v2`，SDK 会在发送请求前自动补上。
+`endpoint` may be the gateway base URL or a URL that already includes `/agent-v2`. The SDK appends `/agent-v2` before sending requests when it is missing.
 
-`X-User-ID` 用于 `tools`、`skills`、`agents` 的注册、更新和删除接口，`agent-gateway` 会用它写入 provider、owner 和操作人字段。`SeaAgentClient.fromConfig()` 会把 `userId` 自动映射为 `X-User-ID`，也可以通过 `headers` 配置其他全局请求头。
+## Listing Resources
 
-列表接口的筛选字段与 CLI/gateway 保持兼容：常用字段包括 `search`、`status`、`provider`、`public`、`limit`、`offset`；兼容字段包括 `sourceKind`、`ownerId`、`category`。分页行为与 CLI 一致：`limit` 省略或 `<= 0` 时默认 20，`> 200` 时由 gateway 封顶为 200，`offset` 从 0 开始。
-
-## 基础示例
-
-查询工具列表：
+List APIs follow CLI and gateway filters. Common filters are `search`, `status`, `provider`, `public`, `limit`, and `offset`. Compatibility filters include `sourceKind`, `ownerId`, and `category`.
 
 ```js
 const tools = await client.tools.list({
@@ -70,18 +115,20 @@ const tools = await client.tools.list({
 console.log(tools);
 ```
 
-普通非流式聊天：
+Pagination follows the gateway behavior: `limit` defaults to 20 when omitted or `<= 0`, the gateway caps values above 200, and `offset` starts at 0.
+
+## Chat Requests
+
+Use `message` for the common single-user-message case:
 
 ```js
 const result = await client.chat.run({
   agentId: "33333333-3333-4333-8333-333333333333",
-  message: "Search recent AI news and summarize the top 3 items.",
+  message: "Fetch https://example.com and explain what it is.",
 });
-
-console.log(result);
 ```
 
-使用多轮消息：
+Use `messages` for multi-turn conversations:
 
 ```js
 const result = await client.chat.run({
@@ -91,11 +138,9 @@ const result = await client.chat.run({
     { role: "user", content: "Fetch https://example.com and explain what it is." },
   ],
 });
-
-console.log(result);
 ```
 
-使用 OpenAI 风格的多模态消息：
+Use OpenAI-style content parts for multimodal messages:
 
 ```js
 const result = await client.chat.run({
@@ -104,22 +149,20 @@ const result = await client.chat.run({
     {
       role: "user",
       content: [
-        { type: "text", text: "描述这张图片" },
+        { type: "text", text: "Describe this image." },
         {
           type: "image_url",
           image_url: {
-            url: "https://image.cdn2.seaart.me/static/infra/agent-chat/user-11/image/20260529/e4fc53aac523b4f56e582a65a717381a.png",
+            url: "https://example.com/image.png",
           },
         },
       ],
     },
   ],
 });
-
-console.log(result);
 ```
 
-带请求元数据和自定义 Header 的聊天：
+Attach request metadata and per-request headers when gateway or worker tracing needs them:
 
 ```js
 const result = await client.chat.run({
@@ -136,15 +179,13 @@ const result = await client.chat.run({
     "X-Trace-ID": "trace_789",
   },
 });
-
-console.log(result);
 ```
 
-`request_id`、`category`、`metadata` 会进入 `agent-gateway` 的 chat 请求体；自定义 Headers 会透传给 agent-worker，SSE 和 WebSocket 创建聊天时都支持。
+`request_id`, `category`, and `metadata` are sent in the chat body. Custom headers are forwarded when the SDK creates non-streaming, SSE, or WebSocket chat requests. Use `extraBody` for gateway fields that are not yet exposed as first-class SDK options.
 
-## SSE 流式聊天
+## Streaming
 
-SSE 是默认流式传输方式，底层使用 HTTP `text/event-stream`，适合大多数 HTTP 网关和代理场景。
+SSE is the default stream transport and works well with most HTTP gateways and proxies:
 
 ```js
 import { SeaAgentClient } from "sea-agent-sdk-js";
@@ -165,7 +206,7 @@ const text = await client.chat.runStream(
       process.stdout.write(delta);
     },
     onEvent(event) {
-      // 可用于记录日志、统计指标、处理工具调用事件等。
+      // Record metrics or inspect tool-call events here.
     },
   },
 );
@@ -173,9 +214,7 @@ const text = await client.chat.runStream(
 console.log("\n\nFinal text:", text);
 ```
 
-## WebSocket 流式聊天
-
-如果调用方希望使用持久连接，或者运行环境已经统一管理 WebSocket 生命周期，可以将 `transport` 切换为 `"ws"`。
+Switch to WebSocket when the caller wants a persistent connection or already manages WebSocket lifecycle:
 
 ```js
 const text = await client.chat.runStream(
@@ -199,11 +238,9 @@ const text = await client.chat.runStream(
 console.log("\n\nFinal text:", text);
 ```
 
-## 订阅已有 Chat
+## Replay an Existing Chat
 
-如果 Chat 由其他进程、浏览器页面或 CLI 创建，可以通过 Chat ID 继续订阅后续事件。`afterSeq` 用于从指定事件序号之后恢复。
-
-SSE：
+If another process, browser page, or CLI command created the chat, subscribe by chat ID. `afterSeq` resumes from events after the specified sequence number.
 
 ```js
 const chatId = "chat_xxxxxxxxxxxxx";
@@ -224,30 +261,11 @@ const text = await client.chat.stream(
 console.log("\n\nReceived text:", text);
 ```
 
-WebSocket：
+Use `transport: "ws"` with the same API to replay over WebSocket.
 
-```js
-const chatId = "chat_xxxxxxxxxxxxx";
+## Inline Agent Config
 
-const text = await client.chat.stream(
-  chatId,
-  {
-    transport: "ws",
-    onTextDelta(delta, event) {
-      process.stdout.write(delta);
-    },
-  },
-  {
-    afterSeq: 10,
-  },
-);
-
-console.log("\n\nReceived text:", text);
-```
-
-## 使用内联 Agent 配置
-
-如果不想引用已注册的 Agent ID，可以直接传入 `agentConfig`。`temperature`、`max_turns`、`timeout` 等运行时字段会由 `agent-gateway` 透传给 agent-worker：
+Pass `agentConfig` when the request should not reference a registered agent. Runtime fields such as `temperature`, `max_turns`, and `timeout` are forwarded by `agent-gateway` to the worker.
 
 ```js
 const result = await client.chat.run({
@@ -265,11 +283,9 @@ const result = await client.chat.run({
   },
   message: "Explain what agent-gateway does.",
 });
-
-console.log(result);
 ```
 
-如果 Agent 需要由 `agent-gateway` 自动拉起 sandbox，可以在 `agentConfig` 中声明 `runtime.sandbox.sandbox_template`。当前支持的模板枚举为 `react-game` 和 `react-web`：
+Declare a sandbox template when the gateway should start a sandbox for the inline agent. Supported template values are `react-game` and `react-web`.
 
 ```js
 const result = await client.chat.run({
@@ -288,15 +304,13 @@ const result = await client.chat.run({
   },
   message: "Create a small React game.",
 });
-
-console.log(result);
 ```
 
-## 注册 Tool、Skill 和 Agent
+## Register Tools, Skills, and Agents
 
-`agent-gateway` 现在用服务端生成的 UUID `id` 作为唯一资源身份。注册表资源查找和关联都使用 UUID；不要在 payload 中传已经移除的 `tool_key`、`skill_key`、`agent_key` 字段。
+`agent-gateway` uses server-generated UUID `id` values as resource identities. Registry lookup and association should use UUIDs; do not send removed `tool_key`, `skill_key`, or `agent_key` fields.
 
-注册工具：
+Register an HTTP tool:
 
 ```js
 const tool = await client.tools.register({
@@ -316,13 +330,11 @@ const tool = await client.tools.register({
   enabled: true,
   public: false,
 });
-
-console.log(tool);
 ```
 
-HTTP Tool `service_name` is a top-level Tool field beside `name` and should identify the backing service shared by tools on the same server. If omitted, agent-gateway derives it from the endpoint host prefix; builtin and no-endpoint tools default to `deepagent`. Do not put `service_name` in metadata/config. Do not send `inject_user_credentials` in user-facing registration payloads; gateway manages it as a top-level Tool/Worker field, defaults it to `false`, and forwards it beside `name` to Worker.
+`service_name` is a top-level tool field beside `name`. It identifies the backing service shared by tools on the same server. If omitted, the gateway derives it from the endpoint host prefix; builtin and no-endpoint tools default to `deepagent`. Do not put `service_name` in metadata/config, and do not send `inject_user_credentials` in user-facing registration payloads.
 
-注册技能：
+Register a skill:
 
 ```js
 const skill = await client.skills.register({
@@ -335,11 +347,9 @@ const skill = await client.skills.register({
   enabled: true,
   public: false,
 });
-
-console.log(skill);
 ```
 
-`required_tools` / `optional_tools` 传已注册 HTTP Tool UUID 时可以直接使用字符串数组；gateway 会自动归一化为 `{ type: "http", ref: "<tool-uuid>" }`。当需要声明非默认类型，或想显式标注 HTTP 类型时，使用对象数组并传 `type` 和 `ref`：
+When `required_tools` or `optional_tools` contains registered HTTP Tool UUID strings, the gateway normalizes them to `{ type: "http", ref: "<tool-uuid>" }`. Use object entries when you need non-default tool types:
 
 ```js
 required_tools: [
@@ -349,24 +359,9 @@ required_tools: [
 ],
 ```
 
-对象格式中 `type` 是必填字段，取值为 `http`、`http_batch`、`builtin` 或 `mcp`；`mcp` 还必须传 `server`。不要用 Tool `name` 或旧的 `tool_key` 作为 `ref`；HTTP/HTTP Batch 以及已注册 builtin 工具应使用 gateway 返回的 Tool UUID。
+`type` is required and must be `http`, `http_batch`, `builtin`, or `mcp`. MCP entries also require `server`. Do not use Tool `name` or old `tool_key` values as `ref`.
 
-Skill 运行时规则：
-
-- `name` 必须匹配 `^[a-z0-9-]+$`，只允许小写字母、数字和连字符；不要使用下划线、空格或大写字母。
-- `description` 必填，建议是一句简短路由说明。注册 Agent 聊天时，gateway 会把它写入 inline `SKILL.md` 的 frontmatter `description`。
-- `instruction` 必填，是完整 markdown body。注册 Agent 聊天时，gateway 会把 Skill 组装为：
-
-```md
----
-name: web-research
-description: Research a topic with web tools.
----
-
-Search, compare sources, and summarize findings.
-```
-
-注册 Agent：
+Register an agent:
 
 ```js
 const agent = await client.agents.register({
@@ -380,11 +375,31 @@ const agent = await client.agents.register({
   },
   enabled: true,
 });
-
-console.log(agent);
 ```
 
-## 注册 Hook endpoint
+## Skill Runtime Rules
+
+| Field | Rule |
+| --- | --- |
+| `name` | Must match `^[a-z0-9-]+$`; use lowercase letters, numbers, and hyphens only |
+| `description` | Required; keep it short because the gateway writes it to inline `SKILL.md` frontmatter |
+| `instruction` | Required; full Markdown body for the skill |
+| `required_tools` / `optional_tools` | Use UUID refs for registered HTTP, HTTP Batch, and registered builtin tools |
+
+When an agent runs with a registered skill, the gateway assembles an inline skill document:
+
+```md
+---
+name: web-research
+description: Research a topic with web tools.
+---
+
+Search, compare sources, and summarize findings.
+```
+
+## Hook Endpoints
+
+Register a hook endpoint for worker events:
 
 ```js
 const hook = await client.hooks.register({
@@ -393,51 +408,25 @@ const hook = await client.hooks.register({
   description: "Receives Agent Worker events for the configured API key.",
   metadata: {},
 });
-
-console.log(hook);
 ```
 
-Hook 使用 `apiKey` 作为 `Authorization: Bearer ...`，payload 中不要传 `api_key`。Worker 固定用 `POST` 调用 endpoint，业务方按事件 payload 中的 `event_id` 自行过滤。
+Hooks use `apiKey` as `Authorization: Bearer ...`; do not send `api_key` in the payload. Worker calls use `POST`, and the receiver should filter by `event_id` in the event payload when needed.
 
-## 资源接口
+## API Reference
 
-- `client.system.health()`
-- `client.system.metrics()`
-- `client.catalog.list(options)`
-- `client.tools.register(payload)`
-- `client.tools.list(options)`
-- `client.tools.get(toolId)`
-- `client.tools.update(toolId, payload)`
-- `client.tools.delete(toolId)`
-- `client.tools.resolve(toolId)`
-- `client.skills.register(payload)`
-- `client.skills.list(options)`
-- `client.skills.get(skillId)`
-- `client.skills.update(skillId, payload)`
-- `client.skills.delete(skillId)`
-- `client.agents.register(payload)`
-- `client.agents.list(options)`
-- `client.agents.get(agentId)`
-- `client.agents.update(agentId, payload)`
-- `client.agents.delete(agentId)`
-- `client.agents.capabilities(agentId)`
-- `client.hooks.register(payload)`
-- `client.hooks.list(options)`
-- `client.hooks.get(hookId)`
-- `client.hooks.update(hookId, payload)`
-- `client.hooks.delete(hookId)`
-- `client.chat.createCompletion(payload)`
-- `client.chat.streamCompletion(payload, handlers)`
-- `client.chat.run(options)`
-- `client.chat.runStream(options, handlers)`
-- `client.chat.get(chatId)`
-- `client.chat.events(chatId, options)`
-- `client.chat.stream(chatId, handlers, options)`
-- `client.chat.cancel(chatId)`
+| Area | Methods |
+| --- | --- |
+| System | `health()`, `metrics()` |
+| Catalog | `list(options)` |
+| Tools | `register(payload)`, `list(options)`, `get(toolId)`, `update(toolId, payload)`, `delete(toolId)`, `resolve(toolId)` |
+| Skills | `register(payload)`, `list(options)`, `get(skillId)`, `update(skillId, payload)`, `delete(skillId)` |
+| Agents | `register(payload)`, `list(options)`, `get(agentId)`, `update(agentId, payload)`, `delete(agentId)`, `capabilities(agentId)` |
+| Hooks | `register(payload)`, `list(options)`, `get(hookId)`, `update(hookId, payload)`, `delete(hookId)` |
+| Chat | `createCompletion(payload)`, `streamCompletion(payload, handlers)`, `run(options)`, `runStream(options, handlers)`, `get(chatId)`, `events(chatId, options)`, `stream(chatId, handlers, options)`, `cancel(chatId)` |
 
-## 流事件工具函数
+## Stream Utilities
 
-如果需要自行处理原始流数据，包内也导出了这些工具函数：
+If you need to process raw stream data yourself, the package also exports these helpers:
 
 ```js
 import {
@@ -448,10 +437,17 @@ import {
 } from "sea-agent-sdk-js";
 ```
 
-## 调试
+## Debugging
 
-设置环境变量后，SDK 会打印发出的 HTTP 和 WebSocket 请求：
+Set `SEAAGENT_DEBUG=1` to print outgoing HTTP and WebSocket requests:
 
 ```bash
 export SEAAGENT_DEBUG=1
 ```
+
+## Next Steps
+
+- Start with `client.chat.run()` for non-streaming requests.
+- Use `client.chat.runStream()` with SSE for most streaming integrations.
+- Use `client.chat.stream()` with `afterSeq` to resume an existing chat.
+- Register tools, skills, and agents with UUID-based references only.
