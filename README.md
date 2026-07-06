@@ -1,6 +1,6 @@
 # sea-agent-sdk-js
 
-> Beta: SDK API 和 agent-gateway 行为仍可能随网关版本调整。
+> Beta: SDK APIs and `agent-gateway` behavior may still change with gateway versions.
 
 Node.js SDK for `agent-gateway`. It wraps the gateway APIs for catalog lookup, resource registration, chat completion, SSE streaming, WebSocket streaming, chat replay, and hook management.
 
@@ -29,11 +29,13 @@ The package is ESM-only and requires Node.js 18 or newer.
 
 ## Quick Start
 
-Install the package:
+Install the package from the internal npm registry configured for SeaArt packages:
 
 ```bash
 npm install sea-agent-sdk-js
 ```
+
+The package is currently documented as an internal package. Make sure your project-level `.npmrc` or user npm configuration points to the internal registry before running the install command.
 
 For local development inside this repository:
 
