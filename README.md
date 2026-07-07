@@ -25,7 +25,7 @@ The package is ESM-only and requires Node.js 18 or newer.
 3. Each resource helper sends gateway-compatible HTTP requests with global and per-request headers.
 4. Chat helpers can either return a full response or process SSE/WebSocket events through callbacks.
 
-`X-User-ID` is required for `tools`, `skills`, and `agents` write operations when the gateway needs provider, owner, or operator metadata. `SeaAgentClient.fromConfig()` maps `userId` from the CLI config to `X-User-ID`.
+`X-User-ID` is required for `tools`, `skills`, and `agents` write operations when the gateway needs provider, owner, or operator metadata.
 
 ## Quick Start
 
@@ -85,27 +85,11 @@ const client = new SeaAgentClient({
 });
 ```
 
-Or reuse the CLI config:
-
-```js
-import { SeaAgentClient } from "sea-agent-sdk-js";
-
-const client = await SeaAgentClient.fromConfig();
-```
-
-By default, the SDK reads `~/.seaagent/config.yaml`:
-
-```yaml
-endpoint: http://127.0.0.1:8080
-apiKey: sa-xxxxxxxx
-userId: production-line-123
-```
-
 `endpoint` may be the gateway base URL or a URL that already includes `/agent-v2`. The SDK appends `/agent-v2` before sending requests when it is missing.
 
 ## Listing Resources
 
-List APIs follow CLI and gateway filters. Common filters are `search`, `status`, `provider`, `public`, `limit`, and `offset`. Compatibility filters include `sourceKind`, `ownerId`, and `category`.
+List APIs pass gateway filters through SDK option objects. Common filters are `search`, `status`, `provider`, `public`, `limit`, and `offset`. Compatibility filters include `sourceKind`, `ownerId`, and `category`.
 
 ```js
 const tools = await client.tools.list({
@@ -292,7 +276,7 @@ The SDK accumulates returned text from `response.text.delta`. It also keeps comp
 
 ## Replay an Existing Chat
 
-If another process, browser page, or CLI command created the chat, subscribe by chat ID. `afterSeq` resumes from events after the specified sequence number.
+If another SDK client or application created the chat, subscribe by chat ID. `afterSeq` resumes from events after the specified sequence number.
 
 ```js
 const chatId = "chat_xxxxxxxxxxxxx";
@@ -487,14 +471,6 @@ import {
   parseWebSocketEvent,
   textFromStreamEvent,
 } from "sea-agent-sdk-js";
-```
-
-## Debugging
-
-Set `SEAAGENT_DEBUG=1` to print outgoing HTTP and WebSocket requests:
-
-```bash
-export SEAAGENT_DEBUG=1
 ```
 
 ## Next Steps
