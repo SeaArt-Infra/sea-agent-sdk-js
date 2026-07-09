@@ -98,6 +98,7 @@ function buildRunPayload(options, stream) {
     ...(options.agentId ? { agent_id: options.agentId } : {}),
     ...(options.category ? { category: options.category } : {}),
     ...(options.agentConfig ? { agent_config: options.agentConfig } : {}),
+    ...(Array.isArray(options.skillIds) && options.skillIds.length > 0 ? { skill_ids: options.skillIds } : {}),
     ...(options.metadata ? { metadata: options.metadata } : {}),
     ...(options.extraBody ?? {}),
     ...(options.headers ? { headers: options.headers } : {}),

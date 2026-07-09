@@ -40,3 +40,22 @@ test("run forwards multimodal chat messages unchanged", async () => {
     },
   ]);
 });
+
+test("run forwards skill ids", async () => {
+  let seen;
+  const chat = new ChatResource({
+    async post(path, body) {
+      seen = { path, body };
+      return { ok: true };
+    },
+  });
+
+  await chat.run({
+    agentId: "agent_1",
+    skillIds: ["11111111-1111-1111-1111-111111111111"],
+    message: "hello",
+  });
+
+  assert.equal(seen.path, "/v1/chat/completions");
+  assert.deepEqual(seen.body.skill_ids, ["11111111-1111-1111-1111-111111111111"]);
+});
