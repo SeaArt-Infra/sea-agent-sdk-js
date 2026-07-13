@@ -1,4 +1,5 @@
-import { request, WebSocket } from "undici";
+import { request } from "undici";
+import WebSocket from "ws";
 
 export class SeaAgentTransport {
   constructor(endpoint, apiKey, headers = {}) {
@@ -15,8 +16,15 @@ export class SeaAgentTransport {
     return this.requestText("GET", this.buildURL(path, query));
   }
 
-  async getStream(path, query, onChunk) {
-    await this.requestStream("GET", this.buildURL(path, query), undefined, onChunk);
+  async getStream(path, query, onChunk, options = {}) {
+    await this.requestStream(
+      "GET",
+      this.buildURL(path, query),
+      undefined,
+      onChunk,
+      options.headers,
+      options.signal,
+    );
   }
 
   async post(path, body, headers) {
@@ -27,8 +35,8 @@ export class SeaAgentTransport {
     return this.requestText("POST", this.buildURL(path), body, "*/*", headers);
   }
 
-  async postStream(path, body, onChunk, headers) {
-    await this.requestStream("POST", this.buildURL(path), body, onChunk, headers);
+  async postStream(path, body, onChunk, headers, options = {}) {
+    await this.requestStream("POST", this.buildURL(path), body, onChunk, headers, options.signal);
   }
 
   async put(path, body) {
@@ -39,9 +47,10 @@ export class SeaAgentTransport {
     return this.requestJSON("DELETE", this.buildURL(path, query));
   }
 
-  async websocket(path, query, initialMessage, onMessage, headers) {
+  async websocket(path, query, initialMessage, onMessage, headers, options = {}) {
     const url = this.buildWebSocketURL(path, query);
     const requestHeaders = this.buildHeaders("*/*", false, headers);
+    throwIfAborted(options.signal);
     if (isDebugEnabled()) {
       console.error(`WS ${url}`);
     }
@@ -56,6 +65,7 @@ export class SeaAgentTransport {
           return;
         }
         settled = true;
+        options.signal?.removeEventListener("abort", onAbort);
         if (error) {
           reject(error);
           return;
@@ -63,35 +73,49 @@ export class SeaAgentTransport {
         resolve();
       };
 
-      ws.addEventListener("open", () => {
+      const onAbort = () => {
+        settle(abortError(options.signal));
+        terminateWebSocket(ws);
+      };
+      options.signal?.addEventListener("abort", onAbort, { once: true });
+
+      ws.once("open", () => {
         opened = true;
         if (initialMessage !== undefined) {
           ws.send(JSON.stringify(initialMessage));
         }
       });
 
-      ws.addEventListener("message", (event) => {
+      ws.on("message", (data) => {
         try {
-          onMessage(webSocketMessageToString(event.data));
+          onMessage(webSocketMessageToString(data));
         } catch (error) {
-          if (ws.readyState === ws.OPEN) {
-            ws.close();
-          }
-          settle(error instanceof Error ? error : new Error(String(error)));
+          const streamError = error instanceof Error ? error : new Error(String(error));
+          closeWebSocket(ws, streamError.terminal === true ? 1000 : 1011);
+          settle(streamError);
         }
       });
 
-      ws.addEventListener("error", (event) => {
-        settle(new Error(errorMessageFromWebSocketEvent(event)));
+      ws.once("unexpected-response", (_request, response) => {
+        const statusCode = response.statusCode;
+        const message = response.statusMessage || "websocket handshake failed";
+        response.resume();
+        settle(new SeaAgentHTTPError(statusCode, message));
+        terminateWebSocket(ws);
       });
 
-      ws.addEventListener("close", (event) => {
+      ws.once("error", (error) => {
+        settle(error instanceof Error ? error : new Error(String(error)));
+      });
+
+      ws.once("close", (code, reason) => {
+        const reasonText = webSocketMessageToString(reason);
         if (!opened) {
-          settle(new Error(`websocket connection closed before open: ${event.code} ${event.reason}`.trim()));
+          settle(new Error(`websocket connection closed before open: ${code} ${reasonText}`.trim()));
           return;
         }
-        if (event.code !== 1000 && event.code !== 1005) {
-          settle(new Error(`websocket connection closed: ${event.code} ${event.reason}`.trim()));
+        if (code !== 1000 && code !== 1005) {
+          settle(new Error(`websocket connection closed: ${code} ${reasonText}`.trim()));
           return;
         }
         settle();
@@ -136,30 +160,37 @@ export class SeaAgentTransport {
     });
     const text = await response.body.text();
     if (response.statusCode >= 400) {
-      throw new Error(`${response.statusCode}: ${errorMessageFromResponse(text)}`);
+      throw new SeaAgentHTTPError(response.statusCode, errorMessageFromResponse(text));
     }
     return text;
   }
 
-  async requestStream(method, url, body, onChunk, requestHeaders) {
+  async requestStream(method, url, body, onChunk, requestHeaders, signal) {
     const { headers, payload } = this.buildRequest(method, url, body, "text/event-stream", requestHeaders);
     const response = await request(url, {
       method,
       headers,
       body: payload,
+      signal,
     });
     if (response.statusCode >= 400) {
       const text = await response.body.text();
-      throw new Error(`${response.statusCode}: ${errorMessageFromResponse(text)}`);
+      throw new SeaAgentHTTPError(response.statusCode, errorMessageFromResponse(text));
     }
 
     const decoder = new TextDecoder();
-    for await (const chunk of response.body) {
-      onChunk(decoder.decode(chunk, { stream: true }));
-    }
-    const rest = decoder.decode();
-    if (rest) {
-      onChunk(rest);
+    try {
+      for await (const chunk of response.body) {
+        onChunk(decoder.decode(chunk, { stream: true }));
+      }
+      const rest = decoder.decode();
+      if (rest) {
+        onChunk(rest);
+      }
+    } finally {
+      if (!response.body.destroyed) {
+        response.body.destroy();
+      }
     }
   }
 
@@ -191,6 +222,14 @@ export class SeaAgentTransport {
     }
 
     return headers;
+  }
+}
+
+export class SeaAgentHTTPError extends Error {
+  constructor(statusCode, message) {
+    super(`${statusCode}: ${message}`);
+    this.name = "SeaAgentHTTPError";
+    this.statusCode = statusCode;
   }
 }
 
@@ -265,12 +304,39 @@ function webSocketMessageToString(data) {
   return String(data);
 }
 
-function errorMessageFromWebSocketEvent(event) {
-  if ("message" in event && typeof event.message === "string" && event.message) {
-    return event.message;
+function closeWebSocket(ws, code) {
+  if (ws.readyState !== WebSocket.OPEN) {
+    terminateWebSocket(ws);
+    return;
   }
-  if ("error" in event && event.error instanceof Error) {
-    return event.error.message;
+  ws.close(code);
+  const timeout = setTimeout(() => {
+    if (ws.readyState !== WebSocket.CLOSED) {
+      terminateWebSocket(ws);
+    }
+  }, 250);
+  timeout.unref?.();
+}
+
+function terminateWebSocket(ws) {
+  try {
+    ws.terminate();
+  } catch {
+    // The socket may already be closed by a concurrent error or abort.
   }
-  return "websocket error";
+}
+
+function throwIfAborted(signal) {
+  if (signal?.aborted) {
+    throw abortError(signal);
+  }
+}
+
+function abortError(signal) {
+  if (signal?.reason instanceof Error) {
+    return signal.reason;
+  }
+  const error = new Error("The operation was aborted");
+  error.name = "AbortError";
+  return error;
 }

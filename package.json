@@ -1,6 +1,6 @@
 {
   "name": "sea-agent-sdk-js",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Node.js SDK for agent-gateway APIs.",
   "type": "module",
   "main": "./src/index.js",
@@ -15,10 +15,11 @@
     "README.md"
   ],
   "dependencies": {
-    "undici": "^6.21.1",
+    "undici": "^6.27.0",
+    "ws": "^8.21.0",
     "yaml": "^2.6.1"
   },
   "engines": {
-    "node": ">=18"
+    "node": ">=18.17"
   }
 }

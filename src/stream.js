@@ -1,43 +1,119 @@
-export function createChatStreamProcessor(handlers = {}) {
+const TERMINAL_EVENTS = new Set([
+  "response.completed",
+  "response.failed",
+  "response.cancelled",
+  "response.canceled",
+  "chat.response",
+  "chat.completed",
+  "chat.failed",
+  "chat.cancelled",
+]);
+
+export class StreamConsumerError extends Error {
+  constructor(message, cause) {
+    super(message, { cause });
+    this.name = "StreamConsumerError";
+    this.retryable = false;
+  }
+}
+
+export function createChatStreamProcessor(handlers = {}, initialState = {}) {
   let buffer = "";
   let text = "";
+  let lastSeq = normalizeSeq(initialState.lastSeq);
+  let runId = typeof initialState.runId === "string" ? initialState.runId : "";
+  let terminal = false;
 
   const handleEvent = (event) => {
-    if (handlers.onEvent) {
-      handlers.onEvent(event);
-    }
-    const delta = textFromStreamEvent(event);
-    if (!delta) {
+    if (terminal) {
       return;
     }
-    text += delta;
-    if (handlers.onTextDelta) {
-      handlers.onTextDelta(delta, event);
+    if (event.seq > 0 && event.seq <= lastSeq) {
+      return;
+    }
+
+    try {
+      if (handlers.onEvent) {
+        handlers.onEvent(event);
+      }
+      const delta = textFromStreamEvent(event);
+      if (delta) {
+        if (handlers.onTextDelta) {
+          handlers.onTextDelta(delta, event);
+        }
+        text += delta;
+      }
+    } catch (error) {
+      throw new StreamConsumerError("stream event handler failed", error);
+    }
+
+    if (event.event === "chat.created" && typeof event.data?.run_id === "string") {
+      runId = event.data.run_id;
+    }
+    if (event.seq > 0) {
+      lastSeq = event.seq;
+    }
+    if (TERMINAL_EVENTS.has(event.event)) {
+      terminal = true;
     }
   };
 
   return {
     writeSSEChunk(chunk) {
+      if (terminal) {
+        return;
+      }
       buffer += chunk;
       const parts = buffer.split(/\r?\n\r?\n/);
       buffer = parts.pop() ?? "";
-      for (const part of parts) {
-        for (const event of parseSSE(part)) {
-          handleEvent(event);
+      try {
+        eventLoop:
+        for (const part of parts) {
+          for (const event of parseSSE(part)) {
+            handleEvent(event);
+            if (terminal) {
+              buffer = "";
+              break eventLoop;
+            }
+          }
         }
+      } catch (error) {
+        if (error instanceof StreamConsumerError) {
+          throw error;
+        }
+        throw new StreamConsumerError("failed to parse SSE event", error);
       }
     },
     writeWebSocketMessage(message) {
-      handleEvent(parseWebSocketEvent(message));
+      if (terminal) {
+        return;
+      }
+      try {
+        handleEvent(parseWebSocketEvent(message));
+      } catch (error) {
+        if (error instanceof StreamConsumerError) {
+          throw error;
+        }
+        throw new StreamConsumerError("failed to parse WebSocket event", error);
+      }
+    },
+    discardIncompleteSSE() {
+      buffer = "";
     },
     end() {
-      if (buffer.trim()) {
-        for (const event of parseSSE(buffer)) {
-          handleEvent(event);
-        }
-        buffer = "";
-      }
       return text;
+    },
+    get text() {
+      return text;
+    },
+    get lastSeq() {
+      return lastSeq;
+    },
+    get runId() {
+      return runId;
+    },
+    get terminal() {
+      return terminal;
     },
   };
 }
@@ -46,10 +122,15 @@ export function parseSSE(text) {
   const events = [];
   for (const block of text.split(/\r?\n\r?\n+/)) {
     const lines = block.split(/\r?\n/);
+    let id = "";
     let event = "message";
     const dataLines = [];
 
     for (const line of lines) {
+      if (line.startsWith("id:")) {
+        id = line.slice("id:".length).trim();
+        continue;
+      }
       if (line.startsWith("event:")) {
         event = line.slice("event:".length).trim();
         continue;
@@ -70,7 +151,7 @@ export function parseSSE(text) {
     } catch {
       // Keep non-JSON data as raw text.
     }
-    events.push({ event, data });
+    events.push({ id, seq: normalizeSeq(id), event, data });
   }
 
   return events;
@@ -81,11 +162,11 @@ export function parseWebSocketEvent(message) {
   try {
     parsed = JSON.parse(message);
   } catch {
-    return { event: "message", data: message };
+    return { id: "", seq: 0, event: "message", data: message };
   }
 
   if (!parsed || typeof parsed !== "object") {
-    return { event: "message", data: parsed };
+    return { id: "", seq: 0, event: "message", data: parsed };
   }
 
   const event = typeof parsed.event === "string" && parsed.event ? parsed.event : "message";
@@ -95,14 +176,15 @@ export function parseWebSocketEvent(message) {
     throw new Error(`${code}${errorText}`);
   }
 
-  return { event, data: parsed.data };
+  const id = typeof parsed.id === "string" ? parsed.id : parsed.id == null ? "" : String(parsed.id);
+  return { id, seq: normalizeSeq(id), event, data: parsed.data };
 }
 
 export function textFromStreamEvent(event) {
   if (event.event === "response.text.delta" || event.event === "response.output_text.delta") {
     return stringField(event.data, "delta");
   }
-  if (event.event === "chat.response" || event.event === "message.delta") {
+  if (event.event === "chat.response" || event.event === "chat.delta" || event.event === "message.delta") {
     return (
       stringField(event.data, "content") ||
       stringField(event.data, "text") ||
@@ -118,4 +200,9 @@ function stringField(data, field) {
   }
   const value = data[field];
   return typeof value === "string" ? value : "";
+}
+
+function normalizeSeq(value) {
+  const seq = Number(value);
+  return Number.isSafeInteger(seq) && seq > 0 ? seq : 0;
 }

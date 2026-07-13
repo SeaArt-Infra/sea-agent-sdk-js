@@ -4,7 +4,7 @@
 
 Node.js SDK for `agent-gateway`. It wraps the gateway APIs for catalog lookup, resource registration, chat completion, SSE streaming, WebSocket streaming, chat replay, and hook management.
 
-The package is ESM-only and requires Node.js 18 or newer.
+The package is ESM-only and requires Node.js 18.17 or newer.
 
 ## Available Resources
 
@@ -24,6 +24,7 @@ The package is ESM-only and requires Node.js 18 or newer.
 2. The SDK normalizes the endpoint to include `/agent-v2` when needed.
 3. Each resource helper sends gateway-compatible HTTP requests with global and per-request headers.
 4. Chat helpers can either return a full response or process SSE/WebSocket events through callbacks.
+5. Streaming helpers automatically resume transient disconnects from the last delivered event sequence.
 
 `X-User-ID` is required for `tools`, `skills`, and `agents` write operations when the gateway needs provider, owner, or operator metadata.
 
@@ -202,7 +203,11 @@ const text = await client.chat.runStream(
       process.stdout.write(delta);
     },
     onEvent(event) {
-      // Record metrics or inspect tool-call events here.
+      // event.id is the SSE/WebSocket ID; event.seq is its numeric resume cursor.
+      // Persist them if the application needs to resume after a process restart.
+    },
+    onReconnect({ attempt, runId, afterSeq, error }) {
+      console.warn("stream reconnect", { attempt, runId, afterSeq, error });
     },
   },
 );
@@ -236,19 +241,21 @@ console.log("\n\nFinal text:", text);
 
 ### Worker Stream Event Format
 
-`agent-gateway` forwards worker stream events as SSE blocks or WebSocket messages. The SDK normalizes both transports into `{ event, data }`. Use `onTextDelta` for assistant text and `onEvent` for all raw lifecycle, tool, skill, and terminal events.
+`agent-gateway` forwards worker stream events as SSE blocks or WebSocket messages. The SDK normalizes both transports into `{ id, seq, event, data }`. `id` is the raw SSE/WebSocket event ID, while `seq` is its positive safe-integer value (`0` for heartbeat, a missing ID, or an ID outside JavaScript's safe-integer range). Both `onEvent` and the event passed to `onTextDelta` receive these fields. Use `onTextDelta` for assistant text and `onEvent` for all raw lifecycle, tool, skill, and terminal events.
 
 SSE frames use the standard event/data envelope:
 
 ```text
 event: response.text.delta
 data: {"type":"response.text.delta","response_id":"run_xxx","item_id":"item_run_xxx_msg","output_index":0,"content_index":0,"delta":"hello"}
+id: 12
 ```
 
 WebSocket frames carry the same payload under `data`:
 
 ```json
 {
+  "id": "12",
   "event": "response.text.delta",
   "data": {
     "type": "response.text.delta",
@@ -269,6 +276,7 @@ Common worker event sequence:
 | `response.in_progress` | Run enters processing | `type`, `response.id`, `response.status` |
 | `response.output_item.added` | Assistant message item or tool call item starts | `response_id`, `output_index`, `item.type`, `item.id`, `item.status`; tool calls also include `item.call_id`, `item.name` |
 | `response.content_part.added` | Assistant text content part starts | `response_id`, `item_id`, `output_index`, `content_index`, `part.type` |
+| `chat.delta` | Legacy assistant text chunk | `content`, `text`, or `delta` |
 | `response.text.delta` | Assistant text token/chunk | `response_id`, `item_id`, `output_index`, `content_index`, `delta` |
 | `response.function_call_arguments.done` | Tool call arguments are finalized | `response_id`, `item_id`, `call_id`, `name`, `arguments` as a JSON string |
 | `fabric.tool.started` | Worker starts a tool call | `tool.id`, `tool.call_id`, `tool.name`, `tool.status`, `tool.arguments` |
@@ -280,13 +288,52 @@ Common worker event sequence:
 | `response.output_item.done` | Assistant message or function call output item completes | `item.type`, `item.status`, `item.content` for messages; `item.call_id`, `item.arguments`, `item.output` for tool calls |
 | `response.completed` | Run completed successfully | `response.id`, `response.status`, `response.usage`, `response.elapsed_ms`, `response.metadata`, `response.output` |
 | `response.failed` | Run failed | `response.status`, `response.error.type`, `response.error.code`, `response.error.message` |
-| `response.cancelled` | Run was cancelled | `response.status`, `response.cancel_reason` |
+| `response.cancelled` / `response.canceled` | Run was cancelled | `response.status`, `response.cancel_reason` |
+| `chat.response` / `chat.completed` | Legacy successful terminal event | `content`, `finish_reason` |
+| `chat.failed` / `chat.cancelled` | Legacy failed or cancelled terminal event | `error_code`, `error_message`, `status` |
 
-The SDK accumulates returned text from `response.text.delta`. It also keeps compatibility with legacy `response.output_text.delta`, `chat.response`, and `message.delta` text events. Tool, skill, usage, metadata, and terminal details are not passed to `onTextDelta`; inspect them in `onEvent`.
+The SDK accumulates returned text from `response.text.delta`. It also keeps compatibility with `response.output_text.delta`, `chat.delta`, `chat.response`, and `message.delta` text events. Tool, skill, usage, metadata, and terminal details are not passed to `onTextDelta`; inspect them in `onEvent`.
+
+Terminal events are `response.completed`, `response.failed`, `response.cancelled`, `response.canceled`, `chat.response`, `chat.completed`, `chat.failed`, and `chat.cancelled`. After the terminal event callbacks complete successfully, the SDK commits its sequence, ignores any later frames, and closes the active SSE or WebSocket connection without waiting for the server to close it.
+
+### Automatic Resume
+
+`runStream()`, `streamCompletion()`, and `stream()` automatically resume when a connection ends before a terminal event. The SDK remembers the last event delivered successfully and reconnects with `after_seq`. If the connection fails before `chat.created` supplies a run ID, the SDK retries the creation request with one stable, automatically generated `request_id`, so the gateway can replay the same run instead of starting another one. Incomplete SSE frames and replayed sequence numbers are discarded. A successfully processed terminal event stops the connection immediately and is never retried, even if closing the underlying socket also reports an error.
+
+Configure resume behavior in the handlers object:
+
+```js
+const controller = new AbortController();
+
+await client.chat.runStream(options, {
+  signal: controller.signal,
+  autoResume: true,          // default
+  maxReconnects: 3,         // retries after the initial connection
+  reconnectDelayMs: 250,    // exponential backoff base
+  maxReconnectDelayMs: 5000,
+  onReconnect(details) {
+    console.warn(details.attempt, details.runId, details.afterSeq);
+  },
+  onTextDelta(delta) {
+    process.stdout.write(delta);
+  },
+});
+```
+
+| Handler field | Default | Behavior |
+| --- | --- | --- |
+| `autoResume` | `true` | Resume a stream that closes before a terminal event |
+| `maxReconnects` | `3` | Reconnect attempts after the initial connection; `0` disables retries |
+| `reconnectDelayMs` | `250` | Initial reconnect delay in milliseconds |
+| `maxReconnectDelayMs` | `5000` | Maximum exponential-backoff delay in milliseconds |
+| `signal` | `undefined` | Abort the active connection or a pending reconnect delay |
+| `onReconnect` | `undefined` | Receives `{ attempt, delayMs, runId, afterSeq, error }` |
+
+EOF, network failures, HTTP `408`/`429`, and `5xx` responses are retried. Abort, other `4xx` responses, explicit WebSocket `error` events, and exceptions from user callbacks are returned immediately. Non-JSON event data remains available as raw text. Set `autoResume: false` for one-shot connection behavior. Automatic resume covers connection loss in the current process; persist `runId` and `seq` and call `stream(runId, ..., { afterSeq: seq })` when recovery must survive a process restart.
 
 ## Replay an Existing Chat
 
-If another SDK client or application created the chat, subscribe by chat ID. `afterSeq` resumes from events after the specified sequence number.
+If another SDK client or application created the chat, subscribe by chat ID. `afterSeq` selects the initial cursor; later connection loss is resumed automatically from the last delivered event.
 
 ```js
 const chatId = "chat_xxxxxxxxxxxxx";
@@ -487,5 +534,5 @@ import {
 
 - Start with `client.chat.run()` for non-streaming requests.
 - Use `client.chat.runStream()` with SSE for most streaming integrations.
-- Use `client.chat.stream()` with `afterSeq` to resume an existing chat.
+- Use `client.chat.stream()` with `afterSeq` to resume an existing chat after a process restart.
 - Register tools, skills, and agents with UUID-based references only.

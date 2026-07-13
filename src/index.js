@@ -8,5 +8,7 @@ export {
   createChatStreamProcessor,
   parseSSE,
   parseWebSocketEvent,
+  StreamConsumerError,
   textFromStreamEvent,
 } from "./stream.js";
+export { SeaAgentHTTPError } from "./transport.js";
