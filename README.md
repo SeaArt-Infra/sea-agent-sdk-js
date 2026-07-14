@@ -15,7 +15,7 @@ The package is ESM-only and requires Node.js 18.17 or newer.
 | Tools | `client.tools` | Register, list, update, delete, and resolve tools |
 | Skills | `client.skills` | Register, list, update, and delete skills |
 | Agents | `client.agents` | Register, list, update, delete, and inspect agents |
-| Hooks | `client.hooks` | Register and manage worker event hook endpoints |
+| Hooks | `client.hooks` | Manage the multimodal charge reservation hook |
 | Chat | `client.chat` | Run chat, stream chat, replay events, and cancel chats |
 
 ## How It Works
@@ -492,18 +492,46 @@ Search, compare sources, and summarize findings.
 
 ## Hook Endpoints
 
-Register a hook endpoint for worker events:
+Register the single hook endpoint owned by the configured API key:
 
 ```js
 const hook = await client.hooks.register({
   name: "production-line-hook",
   endpoint: "https://example.com/agent-hook",
-  description: "Receives Agent Worker events for the configured API key.",
-  metadata: {},
+  description: "Receives multimodal charge reservation events for the configured API key.",
 });
+const updated = await client.hooks.update({
+  name: "production-line-hook",
+  endpoint: "https://example.com/agent-hook",
+  description: "Receives multimodal charge reservation events for the configured API key.",
+});
+const deleted = await client.hooks.delete();
 ```
 
-Hooks use `apiKey` as `Authorization: Bearer ...`; do not send `api_key` in the payload. Worker calls use `POST`, and the receiver should filter by `event_id` in the event payload when needed.
+Hook management requests use `apiKey` as `Authorization: Bearer ...`; registration and update request fields are `name`, `endpoint`, and `description`. One API key owns at most one active Hook. Registration creates a Hook and returns `409 Conflict` when one is already active; after deletion, the same API key can register again.
+
+### Callback event: `multimodal.charge.reserve`
+
+The Worker sends this event with fixed `POST` immediately before submitting a multimodal model operation. Callback `metadata` is copied from the individual chat request:
+
+```json
+{
+  "event_id": "evt_...",
+  "event": "multimodal.charge.reserve",
+  "run_id": "run_...",
+  "metadata": {},
+  "data": {
+    "operation_id": "op_...",
+    "tool_name": "generate",
+    "model": "model-name",
+    "modality": "multimodal",
+    "cost": "0.035",
+    "currency": "USD"
+  }
+}
+```
+
+For this event, the endpoint must synchronously return an HTTP success status and a top-level JSON object. Approval returns `{"approved":true}`. Rejection returns `{"approved":false}` and can include `code` and `message`, for example `{"approved":false,"code":"insufficient_balance","message":"Balance is insufficient"}`.
 
 ## API Reference
 
@@ -514,7 +542,7 @@ Hooks use `apiKey` as `Authorization: Bearer ...`; do not send `api_key` in the 
 | Tools | `register(payload)`, `list(options)`, `get(toolId)`, `update(toolId, payload)`, `delete(toolId)`, `resolve(toolId)` |
 | Skills | `register(payload)`, `list(options)`, `get(skillId)`, `update(skillId, payload)`, `delete(skillId)` |
 | Agents | `register(payload)`, `list(options)`, `get(agentId)`, `update(agentId, payload)`, `delete(agentId)`, `capabilities(agentId)` |
-| Hooks | `register(payload)`, `list(options)`, `get(hookId)`, `update(hookId, payload)`, `delete(hookId)` |
+| Hooks | `register(payload)`, `update(payload)`, `delete()` |
 | Chat | `createCompletion(payload)`, `streamCompletion(payload, handlers)`, `run(options)`, `runStream(options, handlers)`, `get(chatId)`, `events(chatId, options)`, `stream(chatId, handlers, options)`, `cancel(chatId)` |
 
 ## Stream Utilities
