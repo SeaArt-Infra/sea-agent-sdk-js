@@ -52,6 +52,7 @@ import { SeaAgentClient } from "sea-agent-sdk-js";
 const client = new SeaAgentClient({
   endpoint: "http://127.0.0.1:8080",
   apiKey: process.env.AGENT_GATEWAY_API_KEY,
+  timeoutMs: 180_000,
   headers: {
     "X-User-ID": "production-line-123",
   },
@@ -86,7 +87,7 @@ const client = new SeaAgentClient({
 });
 ```
 
-`endpoint` may be the gateway base URL or a URL that already includes `/agent-v2`. The SDK appends `/agent-v2` before sending requests when it is missing.
+`endpoint` may be the gateway base URL or a URL that already includes `/agent-v2`. The SDK appends `/agent-v2` before sending requests when it is missing. Non-streaming requests use a default timeout of 180 seconds. Set `timeoutMs` to override it, or to `0` to disable it. Streaming requests are not subject to `timeoutMs`; use the stream handler's `signal` when a deadline is required.
 
 ## Listing Resources
 

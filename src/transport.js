@@ -1,11 +1,14 @@
 import { request } from "undici";
 import WebSocket from "ws";
 
+const DEFAULT_REQUEST_TIMEOUT_MS = 180_000;
+
 export class SeaAgentTransport {
-  constructor(endpoint, apiKey, headers = {}) {
+  constructor(endpoint, apiKey, headers = {}, timeoutMs = DEFAULT_REQUEST_TIMEOUT_MS) {
     this.endpoint = normalizeAgentGatewayEndpoint(endpoint);
     this.apiKey = apiKey;
     this.headers = { ...headers };
+    this.timeoutMs = normalizeTimeoutMs(timeoutMs);
   }
 
   async get(path, query) {
@@ -157,6 +160,7 @@ export class SeaAgentTransport {
       method,
       headers,
       body: payload,
+      signal: this.timeoutMs === 0 ? undefined : AbortSignal.timeout(this.timeoutMs),
     });
     const text = await response.body.text();
     if (response.statusCode >= 400) {
@@ -257,6 +261,13 @@ export function normalizeAgentGatewayEndpoint(endpoint) {
 function hasHeader(headers, name) {
   const lowerName = name.toLowerCase();
   return Object.keys(headers).some((key) => key.toLowerCase() === lowerName);
+}
+
+function normalizeTimeoutMs(timeoutMs) {
+  if (typeof timeoutMs !== "number" || !Number.isFinite(timeoutMs) || timeoutMs < 0) {
+    throw new TypeError("timeoutMs must be a non-negative finite number");
+  }
+  return timeoutMs;
 }
 
 function isDebugEnabled() {

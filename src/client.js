@@ -13,7 +13,13 @@ export class SeaAgentClient {
     this.endpoint = normalizeAgentGatewayEndpoint(options.endpoint);
     this.apiKey = options.apiKey;
     this.headers = options.headers;
-    this.transport = new SeaAgentTransport(this.endpoint, options.apiKey, options.headers);
+    this.transport = new SeaAgentTransport(
+      this.endpoint,
+      options.apiKey,
+      options.headers,
+      options.timeoutMs,
+    );
+    this.timeoutMs = this.transport.timeoutMs;
     this.system = new SystemResource(this.transport);
     this.catalog = new CatalogResource(this.transport);
     this.tools = new ToolsResource(this.transport);
