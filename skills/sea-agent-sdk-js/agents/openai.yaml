@@ -1,0 +1,4 @@
+interface:
+  display_name: "SeaAgent JavaScript SDK"
+  short_description: "Integrate Node.js services with Agent Gateway APIs."
+  default_prompt: "Use $sea-agent-sdk-js to integrate a Node.js service with Agent Gateway."
