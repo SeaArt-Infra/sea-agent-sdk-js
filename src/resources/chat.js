@@ -273,6 +273,7 @@ function buildRunPayload(options, stream) {
     ...(options.requestId ? { request_id: options.requestId } : {}),
     ...(options.agentId ? { agent_id: options.agentId } : {}),
     ...(options.category ? { category: options.category } : {}),
+    ...(options.reasoningEffort ? { reasoning_effort: options.reasoningEffort } : {}),
     ...(options.agentConfig ? { agent_config: options.agentConfig } : {}),
     ...(Array.isArray(options.skillIds) && options.skillIds.length > 0 ? { skill_ids: options.skillIds } : {}),
     ...(options.metadata ? { metadata: options.metadata } : {}),
