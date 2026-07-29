@@ -59,21 +59,3 @@ test("run forwards skill ids", async () => {
   assert.equal(seen.path, "/v1/chat/completions");
   assert.deepEqual(seen.body.skill_ids, ["11111111-1111-1111-1111-111111111111"]);
 });
-
-test("run forwards reasoning effort", async () => {
-  let seen;
-  const chat = new ChatResource({
-    async post(path, body) {
-      seen = { path, body };
-      return { ok: true };
-    },
-  });
-
-  await chat.run({
-    agentId: "agent_1",
-    reasoningEffort: "high",
-    message: "hello",
-  });
-
-  assert.equal(seen.body.reasoning_effort, "high");
-});
