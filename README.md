@@ -484,6 +484,40 @@ trip for its `SKILL.md`; Skills absent from `pre_skills` remain progressively
 loaded by Worker. `pre_skills` must be a duplicate-free subset of `skills`.
 All bound Skills still resolve their required and optional tools.
 
+### Medium-term memory policy
+
+For a registered Agent, put the optional setting at `config.memory_policy` in
+a concise registration payload or `agent_config.memory_policy` in a low-level
+create/update payload. Omit it to use the normal persistent-session default;
+use it to restrict one Agent when needed:
+
+```js
+config: {
+  memory_policy: {
+    medium_term: {
+      recall: false,
+      learn: false,
+    },
+  },
+},
+```
+
+With a complete scope in a persistent session, both fields default to `true`:
+
+- `medium_term.recall` retrieves relevant semantic medium-term memory as
+  background context for a later persistent run.
+- `medium_term.learn` queues a qualifying completed persistent run for
+  asynchronous extraction; it does not synchronously save a memory during the
+  chat request.
+
+No `metadata.session_id` creates an ephemeral run, where both fields default
+to `false`. A persistent run also needs `metadata.user_id`; missing scope
+identity, user memory opt-out, or Worker `MEMORY_MEDIUM_TERM_ENABLED=false`
+forces both fields off. Stored Agent policy and the top-level chat-request
+`memory_policy` can only restrict a field, never reopen a higher-level closure.
+For a per-run restriction, pass that top-level field through `extraBody`.
+Long-term recall and writes remain disabled by default.
+
 ## Skill Runtime Rules
 
 | Field | Rule |
