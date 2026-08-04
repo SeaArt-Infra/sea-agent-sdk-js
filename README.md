@@ -13,6 +13,7 @@ The package is ESM-only and requires Node.js 18.17 or newer.
 | System | `client.system` | Health and metrics checks |
 | Catalog | `client.catalog` | List resolved catalog entries |
 | Tools | `client.tools` | Register, list, update, delete, and resolve tools |
+| MCPs | `client.mcps` | Register MCP servers and proxy tools/list and tools/call |
 | Skills | `client.skills` | Register, list, update, and delete skills |
 | Agents | `client.agents` | Register, list, update, delete, and inspect agents |
 | Hooks | `client.hooks` | Manage the multimodal charge reservation hook |
@@ -26,7 +27,7 @@ The package is ESM-only and requires Node.js 18.17 or newer.
 4. Chat helpers can either return a full response or process SSE/WebSocket events through callbacks.
 5. Streaming helpers automatically resume transient disconnects from the last delivered event sequence.
 
-`X-User-ID` is required for `tools`, `skills`, and `agents` write operations when the gateway needs provider, owner, or operator metadata.
+`X-User-ID` is required for `tools`, `mcps`, `skills`, and `agents` write operations when the gateway needs provider, owner, or operator metadata.
 
 ## Quick Start
 
@@ -104,6 +105,29 @@ console.log(tools);
 ```
 
 Pagination follows the gateway behavior: `limit` defaults to 20 when omitted or `<= 0`, the gateway caps values above 200, and `offset` starts at 0.
+
+## MCP Servers
+
+Use `client.mcps` to register a streamable HTTP or legacy SSE MCP server. Gateway stores configured upstream headers without returning their values; responses expose only `header_keys`. MCP mutations require `X-User-ID` and `X-Flag: 1` headers.
+
+```js
+const server = await client.mcps.register({
+  name: "sea-search",
+  server_url: "https://mcp.example.com/mcp",
+  transport: "streamable-http",
+  headers: {
+    Authorization: "Bearer token",
+  },
+});
+
+const tools = await client.mcps.tools("mcp-server-id");
+const result = await client.mcps.call("mcp-server-id", {
+  name: "search",
+  arguments: { query: "hello" },
+});
+
+console.log({ server, tools, result });
+```
 
 ## Chat Requests
 
@@ -588,6 +612,7 @@ For this event, the endpoint must synchronously return an HTTP success status an
 | System | `health()`, `metrics()` |
 | Catalog | `list(options)` |
 | Tools | `register(payload)`, `list(options)`, `get(toolId)`, `update(toolId, payload)`, `delete(toolId)`, `resolve(toolId)` |
+| MCPs | `register(payload)`, `list(options)`, `get(mcpId)`, `update(mcpId, payload)`, `delete(mcpId)`, `tools(mcpId)`, `call(mcpId, payload)` |
 | Skills | `register(payload)`, `list(options)`, `get(skillId)`, `update(skillId, payload)`, `delete(skillId)` |
 | Agents | `register(payload)`, `list(options)`, `get(agentId)`, `update(agentId, payload)`, `delete(agentId)`, `capabilities(agentId)` |
 | Hooks | `register(payload)`, `update(payload)`, `delete()` |
@@ -623,7 +648,7 @@ import {
 >
 ---
 name: sea-agent-sdk-js
-description: Integrate Node.js services with SeaArt Agent Gateway through the official sea-agent-sdk-js. Use for catalog lookup, Tool, Skill, Agent, Hook, chat completion, SSE or WebSocket streaming, chat replay, and cancellation in ESM applications.
+description: Integrate Node.js services with SeaArt Agent Gateway through the official sea-agent-sdk-js. Use for catalog lookup, Tool, MCP Server, Skill, Agent, Hook, chat completion, SSE or WebSocket streaming, chat replay, and cancellation in ESM applications.
 ---
 
 # SeaAgent JavaScript SDK
@@ -638,7 +663,7 @@ Use `sea-agent-sdk-js` for Agent Gateway work in Node.js. Prefer its client and 
 4. Use the lowercase client resource that matches the operation.
 5. Run `npm test` after changing the integration.
 
-The SDK appends `/agent-v2` when the configured endpoint does not already contain it. Store the API key outside source control. Send `X-User-ID` for Tool, Skill, and Agent writes when the gateway requires owner or operator metadata.
+The SDK appends `/agent-v2` when the configured endpoint does not already contain it. Store the API key outside source control. Send `X-User-ID` for Tool, MCP Server, Skill, and Agent writes when the gateway requires owner or operator metadata.
 
 ## Create A Client
 
@@ -689,10 +714,15 @@ Preserve the default reconnect behavior unless product requirements demand a dif
 | Health or metrics | `system` |
 | Resolved catalog entries | `catalog` |
 | Tool registration and resolution | `tools` |
+| MCP Server registration and tool proxying | `mcps` |
 | Skill registration and listing | `skills` |
 | Agent registration and inspection | `agents` |
 | Multimodal charge reservation hook | `hooks` |
 | Chat, streaming, replay, cancellation | `chat` |
+
+## Manage MCP Servers
+
+Use `client.mcps` for `register`, `list`, `get`, `update`, `delete`, `tools`, and `call`. Registration and updates accept `streamable-http` or legacy `sse` transports; `call` accepts `{ name, arguments, timeout_ms }`. Include both `X-User-ID` and `X-Flag: 1` for MCP mutations. Gateway never returns stored upstream header values, only `header_keys`; access to a private server's `tools` and `call` operations requires its owner or `X-Admin-Access: 1`.
 
 Pass list filters in each resource's options object. Keep custom gateway fields in `extraBody` only when the SDK has no first-class option. Put request-specific HTTP headers in `headers` on the chat options, not in the JSON body.
 
