@@ -205,6 +205,18 @@ const result = await client.chat.run({
 
 `request_id`, `category`, and `metadata` are sent in the chat body. Custom headers are forwarded when the SDK creates non-streaming, SSE, or WebSocket chat requests. Use `extraBody` for gateway fields that are not yet exposed as first-class SDK options.
 
+Set `reasoningEffort` to override an Agent's saved reasoning setting for one chat only. Omit it to preserve the Agent and Fabric defaults. Agent Gateway accepts `off`, `on`, `minimal`, `low`, `medium`, `high`, `xhigh`, `max`, and `ultra`; callers must select a level supported by the Agent's actual model route.
+
+```js
+import { REASONING_EFFORTS } from "sea-agent-sdk-js";
+
+const result = await client.chat.run({
+  agentId: "33333333-3333-4333-8333-333333333333",
+  reasoningEffort: REASONING_EFFORTS.HIGH,
+  message: "Analyze this request carefully.",
+});
+```
+
 ## Streaming
 
 SSE is the default stream transport and works well with most HTTP gateways and proxies:
@@ -491,6 +503,11 @@ const agent = await client.agents.register({
     "33333333-3333-4333-8333-333333333333",
   ],
   pre_skills: ["11111111-1111-4111-8111-111111111111"],
+  model: {
+    default: "gpt-5.5",
+    allowed: ["gpt-5.5"],
+    reasoning_effort: "medium",
+  },
   config: {
     temperature: 0.2,
     max_turns: 6,
@@ -498,6 +515,11 @@ const agent = await client.agents.register({
   enabled: true,
 });
 ```
+
+`model.reasoning_effort` saves the Agent's default reasoning level. A chat
+request without `reasoningEffort` uses this default; an explicit
+`reasoningEffort` overrides it for that chat only. For the full create or
+update payload, put the same object under `model_config`.
 
 ### Agent Skill preload
 
@@ -724,7 +746,7 @@ Preserve the default reconnect behavior unless product requirements demand a dif
 
 Use `client.mcps` for `register`, `list`, `get`, `update`, `delete`, `tools`, and `call`. Registration and updates accept `streamable-http` or legacy `sse` transports; `call` accepts `{ name, arguments, timeout_ms }`. Include both `X-User-ID` and `X-Flag: 1` for MCP mutations. Gateway never returns stored upstream header values, only `header_keys`; access to a private server's `tools` and `call` operations requires its owner or `X-Admin-Access: 1`.
 
-Pass list filters in each resource's options object. Keep custom gateway fields in `extraBody` only when the SDK has no first-class option. Put request-specific HTTP headers in `headers` on the chat options, not in the JSON body.
+Pass list filters in each resource's options object. `reasoningEffort` is a first-class chat option; keep other custom gateway fields in `extraBody` only when the SDK has no first-class option. Put request-specific HTTP headers in `headers` on the chat options, not in the JSON body.
 
 ## Verify And Protect Data
 
