@@ -59,6 +59,23 @@ console.log("\nFinal text:", text);
 
 Preserve the default reconnect behavior unless product requirements demand a different retry policy. Use `client.chat.events`, `client.chat.stream`, or `client.chat.cancel` to replay, resume, or cancel an existing chat.
 
+## Per-Chat Reasoning
+
+Use the top-level `reasoningEffort` option only to override the selected Agent
+for this run. Omit it when the caller did not choose a level so the Agent and
+Fabric defaults remain effective. The supported platform values are `off`,
+`on`, `minimal`, `low`, `medium`, `high`, `xhigh`, `max`, and `ultra`; prefer
+the exported `REASONING_EFFORTS` values and only select values verified for the
+Agent's model route. Do not send provider-specific thinking fields through
+`extraBody`.
+
+## Agent Default Reasoning
+
+To save a default level on an Agent, set `model.reasoning_effort` in the
+concise registration payload. A chat without `reasoningEffort` uses that
+default; an explicit chat value applies only to that chat. Full create and
+update payloads use `model_config.reasoning_effort` instead.
+
 ## Select Resources
 
 | Task | Client resource |

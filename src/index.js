@@ -12,3 +12,4 @@ export {
   textFromStreamEvent,
 } from "./stream.js";
 export { SeaAgentHTTPError } from "./transport.js";
+export { REASONING_EFFORTS } from "./reasoning.js";
