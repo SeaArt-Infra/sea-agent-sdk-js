@@ -129,6 +129,35 @@ const result = await client.mcps.call("mcp-server-id", {
 console.log({ server, tools, result });
 ```
 
+## Bind an MCP Server to a Skill
+
+Use the UUID returned by MCP registration, or the UUID of an `active` MCP
+Server returned by `client.mcps.list(...)` that is visible to the current user.
+Do not put a `server_url` in a Skill payload.
+
+```js
+const mcpServerId = "<registered-mcp-server-uuid>";
+
+const skill = await client.skills.register({
+  name: "mcp-research",
+  description: "Research with the registered MCP server.",
+  instruction: "Use the MCP tools when they are relevant.",
+  config: {
+    mcp_servers: [mcpServerId],
+  },
+  enabled: true,
+  public: false,
+});
+```
+
+`config.mcp_servers` attaches MCP Servers, while `required_tools` binds
+registered Tools; do not represent an MCP Server UUID as a Tool reference.
+Gateway resolves each UUID, enforces active status and visibility, and passes
+the controlled runtime configuration to Fabric. This Skill binding path
+requires an unauthenticated Streamable HTTP endpoint. The MCP Server `public`
+field controls cross-production-line sharing, so keep it false unless sharing
+is intended.
+
 ## Chat Requests
 
 Use `message` for the common single-user-message case:

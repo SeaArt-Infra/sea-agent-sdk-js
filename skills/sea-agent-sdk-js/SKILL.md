@@ -76,6 +76,27 @@ Preserve the default reconnect behavior unless product requirements demand a dif
 
 Use `client.mcps` for `register`, `list`, `get`, `update`, `delete`, `tools`, and `call`. Registration and updates accept `streamable-http` or legacy `sse` transports; `call` accepts `{ name, arguments, timeout_ms }`. Include both `X-User-ID` and `X-Flag: 1` for MCP mutations. Gateway never returns stored upstream header values, only `header_keys`; access to a private server's `tools` and `call` operations requires its owner or `X-Admin-Access: 1`.
 
+## Bind MCP Servers To Skills
+
+Select an `active`, current-user-visible MCP Server UUID from `client.mcps`
+registration or listing; never accept a `server_url` in a Skill payload.
+
+```js
+await client.skills.register({
+  name: "mcp-research",
+  instruction: "Use the registered MCP tools when relevant.",
+  config: { mcp_servers: ["<registered-mcp-server-uuid>"] },
+  enabled: true,
+});
+```
+
+`config.mcp_servers` is separate from `required_tools`: do not represent an
+MCP Server UUID as a Tool reference. Gateway resolves the UUID and enforces
+its active status and visibility. Skill runtime binding currently supports
+an unauthenticated Streamable HTTP endpoint. The MCP Server `public` field
+controls cross-production-line sharing, so keep it false unless sharing is
+intended.
+
 Pass list filters in each resource's options object. Keep custom gateway fields in `extraBody` only when the SDK has no first-class option. Put request-specific HTTP headers in `headers` on the chat options, not in the JSON body.
 
 ## Agent Skill Preload
