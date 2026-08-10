@@ -35,6 +35,8 @@ Use `await SeaAgentClient.fromConfig()` only when the service intentionally shar
 
 Use `message` for a single user turn and `messages` for a multi-turn or multimodal request. Do not set both `agentConfig` and `skillIds`; `skillIds` add temporary Skills to an Agent run.
 
+When `agentId` is set, the SDK sends the same value in `X-Agent-ID` and the JSON `agent_id` field; the gateway gives the header priority during the compatibility rollout.
+
 ```js
 const result = await client.chat.run({
   agentId,

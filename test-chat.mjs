@@ -88,3 +88,23 @@ test("run forwards reasoning effort only when specified", async () => {
   });
   assert.equal(seen.body.reasoning_effort, "high");
 });
+
+test("chat requests send agent id in both the header and body", async () => {
+  let seen;
+  const chat = new ChatResource({
+    async post(path, body, headers) {
+      seen = { path, body, headers };
+      return { ok: true };
+    },
+  });
+
+  const requestHeaders = { "x-agent-id": "stale-agent", "X-Trace-ID": "trace-1" };
+  await chat.run({ agentId: "agent_1", message: "hello", headers: requestHeaders });
+
+  assert.equal(seen.path, "/v1/chat/completions");
+  assert.equal(seen.body.agent_id, "agent_1");
+  assert.equal(seen.headers["X-Agent-ID"], "agent_1");
+  assert.equal(seen.headers["x-agent-id"], undefined);
+  assert.equal(seen.headers["X-Trace-ID"], "trace-1");
+  assert.equal(requestHeaders["x-agent-id"], "stale-agent");
+});
