@@ -291,6 +291,21 @@ function normalizeMessages(message, messages) {
 }
 
 function splitPayloadHeaders(payload) {
-  const { headers, ...body } = payload;
-  return { headers, body };
+  const { headers: requestHeaders, ...body } = payload;
+  return { headers: chatRequestHeaders(requestHeaders, body.agent_id), body };
+}
+
+function chatRequestHeaders(headers, agentId) {
+  if (typeof agentId !== "string" || !agentId.trim()) {
+    return headers;
+  }
+
+  const result = {};
+  for (const [key, value] of Object.entries(headers ?? {})) {
+    if (key.toLowerCase() !== "x-agent-id") {
+      result[key] = value;
+    }
+  }
+  result["X-Agent-ID"] = agentId;
+  return result;
 }

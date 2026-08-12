@@ -3,6 +3,7 @@ import { AgentsResource } from "./resources/agents.js";
 import { CatalogResource } from "./resources/catalog.js";
 import { ChatResource } from "./resources/chat.js";
 import { HooksResource } from "./resources/hooks.js";
+import { McpsResource } from "./resources/mcps.js";
 import { SkillsResource } from "./resources/skills.js";
 import { SystemResource } from "./resources/system.js";
 import { ToolsResource } from "./resources/tools.js";
@@ -23,6 +24,7 @@ export class SeaAgentClient {
     this.system = new SystemResource(this.transport);
     this.catalog = new CatalogResource(this.transport);
     this.tools = new ToolsResource(this.transport);
+    this.mcps = new McpsResource(this.transport);
     this.skills = new SkillsResource(this.transport);
     this.agents = new AgentsResource(this.transport);
     this.hooks = new HooksResource(this.transport);

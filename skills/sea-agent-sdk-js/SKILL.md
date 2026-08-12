@@ -1,6 +1,6 @@
 ---
 name: sea-agent-sdk-js
-description: Integrate Node.js services with SeaArt Agent Gateway through the official sea-agent-sdk-js. Use for catalog lookup, Tool, Skill, Agent, Hook, chat completion, SSE or WebSocket streaming, chat replay, and cancellation in ESM applications.
+description: Integrate Node.js services with SeaArt Agent Gateway through the official sea-agent-sdk-js. Use for catalog lookup, Tool, MCP Server, Skill, Agent, Hook, chat completion, SSE or WebSocket streaming, chat replay, and cancellation in ESM applications.
 ---
 
 # SeaAgent JavaScript SDK
@@ -15,7 +15,7 @@ Use `sea-agent-sdk-js` for Agent Gateway work in Node.js. Prefer its client and 
 4. Use the lowercase client resource that matches the operation.
 5. Run `npm test` after changing the integration.
 
-The SDK appends `/agent-v2` when the configured endpoint does not already contain it. Store the API key outside source control. Send `X-User-ID` for Tool, Skill, and Agent writes when the gateway requires owner or operator metadata.
+The SDK appends `/agent-v2` when the configured endpoint does not already contain it. Store the API key outside source control. Send `X-User-ID` for Tool, MCP Server, Skill, and Agent writes when the gateway requires owner or operator metadata.
 
 ## Create A Client
 
@@ -34,6 +34,8 @@ Use `await SeaAgentClient.fromConfig()` only when the service intentionally shar
 ## Run And Stream Chat
 
 Use `message` for a single user turn and `messages` for a multi-turn or multimodal request. Do not set both `agentConfig` and `skillIds`; `skillIds` add temporary Skills to an Agent run.
+
+When `agentId` is set, the SDK sends the same value in `X-Agent-ID` and the JSON `agent_id` field; the gateway gives the header priority during the compatibility rollout.
 
 ```js
 const result = await client.chat.run({
@@ -66,19 +68,27 @@ Preserve the default reconnect behavior unless product requirements demand a dif
 | Health or metrics | `system` |
 | Resolved catalog entries | `catalog` |
 | Tool registration and resolution | `tools` |
+| MCP Server registration and tool proxying | `mcps` |
 | Skill registration and listing | `skills` |
 | Agent registration and inspection | `agents` |
 | Multimodal charge reservation hook | `hooks` |
 | Chat, streaming, replay, cancellation | `chat` |
 
+## Manage MCP Servers
+
+Use `client.mcps` for `register`, `list`, `get`, `update`, `delete`, `tools`, and `call`. Registration and updates accept `streamable-http` or legacy `sse` transports; `call` accepts `{ name, arguments, timeout_ms }`. Include both `X-User-ID` and `X-Flag: 1` for MCP mutations. Gateway never returns stored upstream header values, only `header_keys`; access to a private server's `tools` and `call` operations requires its owner or `X-Admin-Access: 1`.
+
 Pass list filters in each resource's options object. Keep custom gateway fields in `extraBody` only when the SDK has no first-class option. Put request-specific HTTP headers in `headers` on the chat options, not in the JSON body.
 
 ## Agent Skill Preload
 
-Agent registration keeps `skills` as an array of Skill UUIDs. Repeat the UUID
-of a short instruction needed on every run in `pre_skills`: gateway injects it
-into the resolved system prompt and avoids the initial Worker `read_file` call
-for its `SKILL.md`. Skills only in `skills` retain progressive Worker loading.
+Agent registration keeps `skills` as an array of Skill UUIDs. Add a UUID to
+`pre_skills` only when that Skill is expected in most runs and the model needs
+its full instruction before deciding what to do. Gateway injects it into the
+resolved system prompt and avoids the initial Worker `read_file` call for its
+`SKILL.md`, at the cost of system-prompt tokens on every run. Keep conditional,
+occasional, long, or low-confidence Skills only in `skills` for progressive
+Worker loading; do not preload a Skill merely because it is short.
 `pre_skills` must be a duplicate-free subset of `skills`; every bound Skill
 keeps its tool bindings.
 
