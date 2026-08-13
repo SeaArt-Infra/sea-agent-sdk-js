@@ -277,6 +277,7 @@ function buildRunPayload(options, stream) {
     ...(Array.isArray(options.skillIds) && options.skillIds.length > 0 ? { skill_ids: options.skillIds } : {}),
     ...(options.metadata ? { metadata: options.metadata } : {}),
     ...(options.extraBody ?? {}),
+    ...(options.reasoningEffort ? { reasoning_effort: options.reasoningEffort } : {}),
     ...(options.headers ? { headers: options.headers } : {}),
     messages,
     stream,

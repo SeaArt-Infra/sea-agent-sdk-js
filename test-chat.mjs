@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { REASONING_EFFORTS } from "./src/index.js";
 import { ChatResource } from "./src/resources/chat.js";
 
 test("run forwards multimodal chat messages unchanged", async () => {
@@ -58,6 +59,34 @@ test("run forwards skill ids", async () => {
 
   assert.equal(seen.path, "/v1/chat/completions");
   assert.deepEqual(seen.body.skill_ids, ["11111111-1111-1111-1111-111111111111"]);
+});
+
+test("run forwards reasoning effort only when specified", async () => {
+  let seen;
+  const chat = new ChatResource({
+    async post(path, body) {
+      seen = { path, body };
+      return { ok: true };
+    },
+  });
+
+  await chat.run({
+    agentId: "agent_1",
+    reasoningEffort: REASONING_EFFORTS.OFF,
+    message: "hello",
+  });
+  assert.equal(seen.body.reasoning_effort, "off");
+
+  await chat.run({ agentId: "agent_1", message: "hello" });
+  assert.equal(Object.hasOwn(seen.body, "reasoning_effort"), false);
+
+  await chat.run({
+    agentId: "agent_1",
+    reasoningEffort: REASONING_EFFORTS.HIGH,
+    extraBody: { reasoning_effort: REASONING_EFFORTS.LOW },
+    message: "hello",
+  });
+  assert.equal(seen.body.reasoning_effort, "high");
 });
 
 test("chat requests send agent id in both the header and body", async () => {
