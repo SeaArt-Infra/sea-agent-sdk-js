@@ -353,7 +353,7 @@ Common worker event sequence:
 | `fabric.skill.completed` | Skill file load completes | `skill.status`, `skill.output`, `skill.output_text`, `skill.path` |
 | `response.text.done` | Assistant final text is known | `response_id`, `item_id`, `content_index`, `text` |
 | `response.content_part.done` | Assistant text content part completes | `part.type`, `part.text` |
-| `response.output_item.done` | Assistant message or function call output item completes | `item.type`, `item.status`, `item.content` for messages; `item.call_id`, `item.arguments`, `item.output` for tool calls |
+| `response.output_item.done` | Assistant message or function call output item completes | `item.type`, `item.status`, `item.content` for messages; `item.call_id`, `item.arguments`, `item.output`, optional `item.tool_status` for tool calls (`tool_status` is the tool outcome, distinct from the item lifecycle status) |
 | `response.completed` | Run completed successfully | `response.id`, `response.status`, `response.usage`, `response.elapsed_ms`, `response.metadata`, `response.output` |
 | `response.failed` | Run failed | `response.status`, `response.error.type`, `response.error.code`, `response.error.message` |
 | `response.cancelled` / `response.canceled` | Run was cancelled | `response.status`, `response.cancel_reason` |
@@ -554,12 +554,15 @@ update payload, put the same object under `model_config`.
 
 ### Agent Skill preload
 
-`skills` remains the complete Agent Skill UUID array. To preload a short,
-always-needed Skill, repeat its UUID in `pre_skills`. Gateway resolves each
+`skills` remains the complete Agent Skill UUID array. Add a UUID to
+`pre_skills` only when that Skill is expected in most runs and the model needs
+its full instruction before deciding what to do. Gateway resolves each
 preloaded Skill into the system prompt and avoids the Worker `read_file` round
-trip for its `SKILL.md`; Skills absent from `pre_skills` remain progressively
-loaded by Worker. `pre_skills` must be a duplicate-free subset of `skills`.
-All bound Skills still resolve their required and optional tools.
+trip for its `SKILL.md`, at the cost of system-prompt tokens on every run. Keep
+conditional, occasional, long, or low-confidence Skills only in `skills` for
+progressive Worker loading; do not preload a Skill merely because it is short.
+`pre_skills` must be a duplicate-free subset of `skills`. All bound Skills
+still resolve their required and optional tools.
 
 ### Medium-term memory policy
 
@@ -736,6 +739,8 @@ Use `await SeaAgentClient.fromConfig()` only when the service intentionally shar
 
 Use `message` for a single user turn and `messages` for a multi-turn or multimodal request. Do not set both `agentConfig` and `skillIds`; `skillIds` add temporary Skills to an Agent run.
 
+When `agentId` is set, the SDK sends the same value in `X-Agent-ID` and the JSON `agent_id` field; the gateway gives the header priority during the compatibility rollout.
+
 ```js
 const result = await client.chat.run({
   agentId,
@@ -775,7 +780,7 @@ Preserve the default reconnect behavior unless product requirements demand a dif
 
 ## Manage MCP Servers
 
-Use `client.mcps` for `register`, `list`, `get`, `update`, `delete`, `tools`, and `call`. Registration and updates accept `streamable-http` or legacy `sse` transports; `call` accepts `{ name, arguments, timeout_ms }`. Include both `X-User-ID` and `X-Flag: 1` for MCP mutations. Gateway never returns stored upstream header values, only `header_keys`.
+Use `client.mcps` for `register`, `list`, `get`, `update`, `delete`, `tools`, and `call`. Registration and updates accept `streamable-http` or legacy `sse` transports; `call` accepts `{ name, arguments, timeout_ms }`. Include both `X-User-ID` and `X-Flag: 1` for MCP mutations. Gateway never returns stored upstream header values, only `header_keys`; access to a private server's `tools` and `call` operations requires its owner or `X-Admin-Access: 1`.
 
 Pass list filters in each resource's options object. `reasoningEffort` is a first-class chat option; keep other custom gateway fields in `extraBody` only when the SDK has no first-class option. Put request-specific HTTP headers in `headers` on the chat options, not in the JSON body.
 
