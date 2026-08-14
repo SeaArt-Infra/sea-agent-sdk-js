@@ -13,3 +13,4 @@ export {
 } from "./stream.js";
 export { SeaAgentHTTPError } from "./transport.js";
 export { REASONING_EFFORTS } from "./reasoning.js";
+export { MCP_PROTOCOL_VERSION } from "./resources/mcps.js";
