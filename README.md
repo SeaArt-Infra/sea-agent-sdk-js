@@ -13,7 +13,7 @@ The package is ESM-only and requires Node.js 18.17 or newer.
 | System | `client.system` | Health and metrics checks |
 | Catalog | `client.catalog` | List resolved catalog entries |
 | Tools | `client.tools` | Register, list, update, delete, and resolve tools |
-| MCPs | `client.mcps` | Register MCP servers and proxy tools/list and tools/call |
+| MCPs | `client.mcps` | Register MCP servers; `connectionInfo` for standard MCP client access (`tools`/`call` deprecated) |
 | Skills | `client.skills` | Register, list, update, and delete skills |
 | Agents | `client.agents` | Register, list, update, delete, and inspect agents |
 | Hooks | `client.hooks` | Manage the multimodal charge reservation hook |
@@ -110,6 +110,8 @@ Pagination follows the gateway behavior: `limit` defaults to 20 when omitted or 
 
 Use `client.mcps` to register a streamable HTTP or legacy SSE MCP server. Gateway stores configured upstream headers without returning their values; responses expose only `header_keys`. MCP mutations require `X-User-ID` and `X-Flag: 1` headers.
 
+`tools` and `call` are convenience wrappers over a private REST shape and are **deprecated**. To speak MCP to a registered server, call `connectionInfo` and hand the returned endpoint and headers to an official MCP SDK client — the gateway exposes a standard streamable-HTTP endpoint, so the SDK deliberately does not implement the protocol itself. Upstream registry credentials are injected by the gateway and never appear in these headers.
+
 ```js
 const server = await client.mcps.register({
   name: "sea-search",
@@ -120,13 +122,18 @@ const server = await client.mcps.register({
   },
 });
 
-const tools = await client.mcps.tools("mcp-server-id");
-const result = await client.mcps.call("mcp-server-id", {
-  name: "search",
-  arguments: { query: "hello" },
-});
+// Standard MCP client via the official SDK (streamable-http):
+import { Client } from "@modelcontextprotocol/sdk/client/index.js";
+import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 
-console.log({ server, tools, result });
+const { url, headers } = client.mcps.connectionInfo(server.id);
+const mcp = new Client({ name: "app", version: "1.0.0" });
+await mcp.connect(
+  new StreamableHTTPClientTransport(new URL(url), { requestInit: { headers } }),
+);
+const tools = await mcp.listTools();
+
+console.log({ server, tools });
 ```
 
 ## Bind an MCP Server to a Skill
@@ -780,7 +787,9 @@ Preserve the default reconnect behavior unless product requirements demand a dif
 
 ## Manage MCP Servers
 
-Use `client.mcps` for `register`, `list`, `get`, `update`, `delete`, `tools`, and `call`. Registration and updates accept `streamable-http` or legacy `sse` transports; `call` accepts `{ name, arguments, timeout_ms }`. Include both `X-User-ID` and `X-Flag: 1` for MCP mutations. Gateway never returns stored upstream header values, only `header_keys`; access to a private server's `tools` and `call` operations requires its owner or `X-Admin-Access: 1`.
+Use `client.mcps` for `register`, `list`, `get`, `update`, `delete`, and `connectionInfo`. Registration and updates accept `streamable-http` or legacy `sse` transports. Include both `X-User-ID` and `X-Flag: 1` for MCP mutations. Gateway never returns stored upstream header values, only `header_keys`; access to a private server requires its owner or `X-Admin-Access: 1`.
+
+To call MCP tools, use `connectionInfo(mcpId)` and pass the returned `url` and `headers` to an official MCP SDK client (`@modelcontextprotocol/sdk`, `StreamableHTTPClientTransport`); the gateway endpoint is standard streamable-HTTP and the SDK does not implement the protocol itself. Upstream credentials stay server-side. `tools` and `call` still work but are deprecated private REST shells; they only support streamable-http upstreams.
 
 Pass list filters in each resource's options object. `reasoningEffort` is a first-class chat option; keep other custom gateway fields in `extraBody` only when the SDK has no first-class option. Put request-specific HTTP headers in `headers` on the chat options, not in the JSON body.
 
