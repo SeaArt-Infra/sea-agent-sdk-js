@@ -229,9 +229,9 @@ const result = await client.chat.run({
   requestId: "req_123",
   agentId: "33333333-3333-4333-8333-333333333333",
   message: "Summarize this request context.",
+  userId: "user_456",
+  sessionId: "sess_123",
   metadata: {
-    session_id: "sess_123",
-    user_id: "user_456",
     trace_id: "trace_789",
   },
   headers: {
@@ -240,7 +240,7 @@ const result = await client.chat.run({
 });
 ```
 
-`request_id`, `category`, and `metadata` are sent in the chat body. Custom headers are forwarded when the SDK creates non-streaming, SSE, or WebSocket chat requests. Use `extraBody` for gateway fields that are not yet exposed as first-class SDK options.
+`request_id`, `category`, `userId`, `sessionId`, and `metadata` are sent in the chat body. The top-level identity fields take precedence over `metadata.user_id` and `metadata.session_id`; metadata remains a compatibility fallback. Custom headers are forwarded when the SDK creates non-streaming, SSE, or WebSocket chat requests. Use `extraBody` for gateway fields that are not yet exposed as first-class SDK options.
 
 ## Agent Categories
 
@@ -600,8 +600,9 @@ With a complete scope in a persistent session, both fields default to `true`:
   asynchronous extraction; it does not synchronously save a memory during the
   chat request.
 
-No `metadata.session_id` creates an ephemeral run, where both fields default
-to `false`. A persistent run also needs `metadata.user_id`; missing scope
+No top-level `sessionId` (falling back to `metadata.session_id`) creates an
+ephemeral run, where both fields default to `false`. A persistent run also
+needs top-level `userId` (falling back to `metadata.user_id`); missing scope
 identity, user memory opt-out, or Worker `MEMORY_MEDIUM_TERM_ENABLED=false`
 forces both fields off. Stored Agent policy and the top-level chat-request
 `memory_policy` can only restrict a field, never reopen a higher-level closure.

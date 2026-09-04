@@ -276,6 +276,8 @@ function buildRunPayload(options, stream) {
     ...(options.agentConfig ? { agent_config: options.agentConfig } : {}),
     ...(Array.isArray(options.skillIds) && options.skillIds.length > 0 ? { skill_ids: options.skillIds } : {}),
     ...(options.metadata ? { metadata: options.metadata } : {}),
+    ...(options.userId ? { user_id: options.userId } : {}),
+    ...(options.sessionId ? { session_id: options.sessionId } : {}),
     ...(options.extraBody ?? {}),
     ...(options.reasoningEffort ? { reasoning_effort: options.reasoningEffort } : {}),
     ...(options.headers ? { headers: options.headers } : {}),
