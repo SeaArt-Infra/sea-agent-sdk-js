@@ -61,6 +61,29 @@ test("run forwards skill ids", async () => {
   assert.deepEqual(seen.body.skill_ids, ["11111111-1111-1111-1111-111111111111"]);
 });
 
+test("run forwards top-level user and session identifiers", async () => {
+  let seen;
+  const chat = new ChatResource({
+    async post(path, body) {
+      seen = { path, body };
+      return { ok: true };
+    },
+  });
+
+  await chat.run({
+    agentId: "agent_1",
+    userId: "user_1",
+    sessionId: "session_1",
+    metadata: { user_id: "legacy-user", session_id: "legacy-session" },
+    message: "hello",
+  });
+
+  assert.equal(seen.path, "/v1/chat/completions");
+  assert.equal(seen.body.user_id, "user_1");
+  assert.equal(seen.body.session_id, "session_1");
+  assert.deepEqual(seen.body.metadata, { user_id: "legacy-user", session_id: "legacy-session" });
+});
+
 test("run forwards reasoning effort only when specified", async () => {
   let seen;
   const chat = new ChatResource({
