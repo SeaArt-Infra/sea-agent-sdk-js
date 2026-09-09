@@ -278,6 +278,7 @@ function buildRunPayload(options, stream) {
     ...(options.metadata ? { metadata: options.metadata } : {}),
     ...(options.userId ? { user_id: options.userId } : {}),
     ...(options.sessionId ? { session_id: options.sessionId } : {}),
+    ...(options.extraBody ?? {}),
     ...(options.reasoningEffort ? { reasoning_effort: options.reasoningEffort } : {}),
     ...(options.headers ? { headers: options.headers } : {}),
     messages,
