@@ -240,7 +240,7 @@ const result = await client.chat.run({
 });
 ```
 
-`request_id`, `category`, `userId`, `sessionId`, and `metadata` are sent in the chat body. The top-level identity fields take precedence over `metadata.user_id` and `metadata.session_id`; metadata remains a compatibility fallback. Custom headers are forwarded when the SDK creates non-streaming, SSE, or WebSocket chat requests. Use `extraBody` for gateway fields that are not yet exposed as first-class SDK options.
+`request_id`, `category`, `userId`, `sessionId`, and `metadata` are sent in the chat body. The top-level identity fields take precedence over `metadata.user_id` and `metadata.session_id`; metadata remains a compatibility fallback. Custom headers are forwarded when the SDK creates non-streaming, SSE, or WebSocket chat requests.
 
 ## Agent Categories
 
@@ -604,9 +604,8 @@ No top-level `sessionId` (falling back to `metadata.session_id`) creates an
 ephemeral run, where both fields default to `false`. A persistent run also
 needs top-level `userId` (falling back to `metadata.user_id`); missing scope
 identity, user memory opt-out, or Worker `MEMORY_MEDIUM_TERM_ENABLED=false`
-forces both fields off. Stored Agent policy and the top-level chat-request
-`memory_policy` can only restrict a field, never reopen a higher-level closure.
-For a per-run restriction, pass that top-level field through `extraBody`.
+forces both fields off. Stored Agent policy can only restrict a field, never
+reopen a higher-level closure.
 Long-term recall and writes remain disabled by default.
 
 ## Skill Runtime Rules
@@ -795,7 +794,7 @@ Use `client.mcps` for `register`, `list`, `get`, `update`, `delete`, and `connec
 
 To call MCP tools, use `connectionInfo(mcpId)` and pass the returned `url` and `headers` to an official MCP SDK client (`@modelcontextprotocol/sdk`, `StreamableHTTPClientTransport`); the gateway endpoint is standard streamable-HTTP and the SDK does not implement the protocol itself. Upstream credentials stay server-side. `tools` and `call` still work but are deprecated private REST shells; they only support streamable-http upstreams.
 
-Pass list filters in each resource's options object. `reasoningEffort` is a first-class chat option; keep other custom gateway fields in `extraBody` only when the SDK has no first-class option. Put request-specific HTTP headers in `headers` on the chat options, not in the JSON body.
+Pass list filters in each resource's options object. `reasoningEffort` is a first-class chat option. Put request-specific HTTP headers in `headers` on the chat options, not in the JSON body.
 
 ## Verify And Protect Data
 
