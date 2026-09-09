@@ -106,10 +106,11 @@ test("run forwards reasoning effort only when specified", async () => {
   await chat.run({
     agentId: "agent_1",
     reasoningEffort: REASONING_EFFORTS.HIGH,
-    extraBody: { reasoning_effort: REASONING_EFFORTS.LOW },
+    extraBody: { unsupported_field: true },
     message: "hello",
   });
   assert.equal(seen.body.reasoning_effort, "high");
+  assert.equal(Object.hasOwn(seen.body, "unsupported_field"), false);
 });
 
 test("chat requests send agent id in both the header and body", async () => {
