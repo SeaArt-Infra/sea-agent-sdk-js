@@ -61,6 +61,33 @@ test("run forwards skill ids", async () => {
   assert.deepEqual(seen.body.skill_ids, ["11111111-1111-1111-1111-111111111111"]);
 });
 
+test("run forwards inline skills", async () => {
+  let seen;
+  const chat = new ChatResource({
+    async post(path, body) {
+      seen = { path, body };
+      return { ok: true };
+    },
+  });
+
+  await chat.run({
+    agentId: "agent_1",
+    inlineSkills: [{
+      name: "request-policy",
+      description: "Controls this request.",
+      instruction: "Always answer briefly.",
+    }],
+    message: "hello",
+  });
+
+  assert.equal(seen.path, "/v1/chat/completions");
+  assert.deepEqual(seen.body.inline_skills, [{
+    name: "request-policy",
+    description: "Controls this request.",
+    instruction: "Always answer briefly.",
+  }]);
+});
+
 test("run forwards top-level user and session identifiers", async () => {
   let seen;
   const chat = new ChatResource({
