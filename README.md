@@ -574,6 +574,22 @@ progressive Worker loading; do not preload a Skill merely because it is short.
 `pre_skills` must be a duplicate-free subset of `skills`. All bound Skills
 still resolve their required and optional tools.
 
+Use `inlineSkills` to add request-scoped Markdown instructions without
+registering a Skill. They require `agentId`, cannot be combined with
+`agentConfig`, and are discarded after the run.
+
+```js
+await client.chat.run({
+  agentId: "33333333-3333-4333-8333-333333333333",
+  inlineSkills: [{
+    name: "request-policy",
+    description: "Controls this request.",
+    instruction: "Always answer briefly.",
+  }],
+  message: "Use the request policy for this run.",
+});
+```
+
 ### Medium-term memory policy
 
 For a registered Agent, put the optional setting at `config.memory_policy` in
